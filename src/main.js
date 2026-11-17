@@ -13,11 +13,18 @@ import displayFrag from './shaders/display.frag.glsl?raw';
 
 const canvas = document.getElementById('gl-canvas');
 const statsEl = document.getElementById('stats');
-const toggleSceneBtn = document.getElementById('toggle-scene');
-const toggleSimBtn = document.getElementById('toggle-sim');
-const toggleLaserBtn = document.getElementById('toggle-laser');
+
+const menuOpenBtn = document.getElementById('menu-open-btn');
+const menuCloseBtn = document.getElementById('menu-close-btn');
+const sceneButtons = Array.from(document.querySelectorAll('[data-scene]'));
+const laserSection = document.getElementById('laser-section');
+const simRow = document.getElementById('sim-row');
+const simButtons = Array.from(document.querySelectorAll('[data-sim]'));
+const laserButtons = Array.from(document.querySelectorAll('[data-laser]'));
 const toggleSlitBtn = document.getElementById('toggle-slit');
 const toggleDenoiseBtn = document.getElementById('toggle-denoise');
+const resetCameraBtn = document.getElementById('reset-camera-btn');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -96,12 +103,10 @@ let writeAccum = createAccumMRT(traceSize.x, traceSize.y);
 const denoiseA = createHalfTarget(traceSize.x, traceSize.y, THREE.LinearFilter);
 const denoiseB = createHalfTarget(traceSize.x, traceSize.y, THREE.LinearFilter);
 
-// Targets em Screen-Space para poeira volumétrica do laser no ar
 const airFrameTarget = createHalfTarget(traceSize.x, traceSize.y, THREE.NearestFilter);
 let readAirPhoton = createHalfTarget(traceSize.x, traceSize.y, THREE.LinearFilter);
 let writeAirPhoton = createHalfTarget(traceSize.x, traceSize.y, THREE.LinearFilter);
 
-// Targets fixos em World-Space (Atlas 1024x1024) para superfícies (NÃO reseta ao mover a câmera!)
 const WORLD_ATLAS_SIZE = 1024;
 const worldPhotonFrameTarget = createHalfTarget(WORLD_ATLAS_SIZE, WORLD_ATLAS_SIZE, THREE.NearestFilter);
 let readWorldPhoton = createHalfTarget(WORLD_ATLAS_SIZE, WORLD_ATLAS_SIZE, THREE.LinearFilter);
@@ -127,13 +132,6 @@ const SCENE_PRESETS = [
     noiseScale: 1.35,
     exposure: 1.15
   }
-];
-
-const LASER_MODES = [
-  { label: 'Verde 532nm', color: '#bbf7d0', border: 'rgba(74, 222, 128, 0.5)', bg: 'rgba(34, 197, 94, 0.2)' },
-  { label: 'Vermelho 650nm', color: '#fecaca', border: 'rgba(248, 113, 113, 0.5)', bg: 'rgba(239, 68, 68, 0.2)' },
-  { label: 'Violeta 405nm', color: '#ddd6fe', border: 'rgba(167, 139, 250, 0.5)', bg: 'rgba(139, 92, 246, 0.2)' },
-  { label: 'Branco Espectral', color: '#f3f4f6', border: 'rgba(229, 231, 235, 0.5)', bg: 'rgba(255, 255, 255, 0.16)' }
 ];
 
 const sceneCamera = new THREE.PerspectiveCamera(
@@ -273,7 +271,7 @@ displayScene.add(new THREE.Mesh(quadGeometry, displayMaterial));
 const MAX_SPP_PER_FRAME = 64;
 
 let activeSceneId = 0;
-let laserSimMode = 0; // 0 = Híbrido, 1 = Fótons Reais
+let laserSimMode = 0;
 let laserMode = 0;
 let slit1Blocked = 0;
 let sampleCount = 0;
@@ -295,6 +293,53 @@ let lastGpuMs = null;
 
 const viewProjMatrix = new THREE.Matrix4();
 const pendingQueries = [];
+
+// ---------------- Controles de Menu Lateral e Mobile ----------------
+const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+let menuOpen = !isCoarsePointer && window.innerWidth >= 1024;
+
+function setMenuOpen(open) {
+  menuOpen = open;
+  document.body.classList.toggle('menu-open', open);
+  menuOpenBtn.setAttribute('aria-expanded', String(open));
+}
+
+setMenuOpen(menuOpen);
+menuOpenBtn.addEventListener('click', () => setMenuOpen(true));
+menuCloseBtn.addEventListener('click', () => setMenuOpen(false));
+
+const canFullscreen = Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+if (!canFullscreen) {
+  fullscreenBtn.hidden = true;
+}
+
+function updateFullscreenBtn() {
+  const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  fullscreenBtn.textContent = isFs ? 'Sair Tela Cheia' : 'Tela Cheia';
+  fullscreenBtn.classList.toggle('active', isFs);
+}
+
+fullscreenBtn.addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    } else {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+    }
+  } catch (err) {
+    console.warn('Tela cheia indisponível:', err);
+  }
+});
+
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+document.addEventListener('webkitfullscreenchange', updateFullscreenBtn);
 
 function resetCameraAccumulation() {
   sampleCount = 0;
@@ -341,21 +386,25 @@ function updateTraceResolution(newScale) {
   resetCameraAccumulation();
 }
 
+function updateSceneUI() {
+  sceneButtons.forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.scene) === activeSceneId);
+  });
+}
+
 function updateSimModeUI() {
-  const isReal = laserSimMode === 1;
-  toggleSimBtn.textContent = `Feixe: ${isReal ? 'Fótons Reais' : 'Híbrido'} (F)`;
-  toggleSimBtn.classList.toggle('real', isReal);
+  simButtons.forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.sim) === laserSimMode);
+  });
 
   const mat = cachedSceneMaterials[1];
   if (mat) mat.uniforms.uLaserSimMode.value = laserSimMode;
 }
 
 function updateLaserUI() {
-  const m = LASER_MODES[laserMode];
-  toggleLaserBtn.textContent = `Laser: ${m.label} (L)`;
-  toggleLaserBtn.style.color = m.color;
-  toggleLaserBtn.style.borderColor = m.border;
-  toggleLaserBtn.style.background = m.bg;
+  laserButtons.forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.laser) === laserMode);
+  });
 
   const mat = cachedSceneMaterials[1];
   if (mat) mat.uniforms.uLaserMode.value = laserMode;
@@ -363,7 +412,7 @@ function updateLaserUI() {
 }
 
 function updateSlitUI() {
-  toggleSlitBtn.textContent = `Fenda 1: ${slit1Blocked ? 'Tampada' : 'Aberta'} (B)`;
+  toggleSlitBtn.textContent = `Fenda 1: ${slit1Blocked ? 'Tampada' : 'Aberta'}`;
   toggleSlitBtn.classList.toggle('blocked', slit1Blocked === 1);
 
   const mat = cachedSceneMaterials[1];
@@ -371,7 +420,25 @@ function updateSlitUI() {
   photonMaterial.uniforms.uSlit1Blocked.value = slit1Blocked;
 }
 
+function resetCameraView() {
+  const preset = SCENE_PRESETS[activeSceneId];
+  suppressMoveScale = true;
+  sceneCamera.position.copy(preset.camPos);
+  controls.target.copy(preset.target);
+  controls.update();
+  suppressMoveScale = false;
+
+  isMoving = false;
+  resetAutoSpp();
+  updateTraceResolution(1.0);
+  resetCameraAccumulation();
+}
+
 function switchScene(nextId) {
+  if (nextId === activeSceneId && cachedSceneMaterials[nextId] && ptMesh.material === cachedSceneMaterials[nextId]) {
+    return;
+  }
+
   activeSceneId = nextId;
   const preset = SCENE_PRESETS[activeSceneId];
 
@@ -399,66 +466,64 @@ function switchScene(nextId) {
   displayMaterial.uniforms.uExposure.value = preset.exposure;
 
   const isDiff = activeSceneId === 1;
-  toggleSimBtn.hidden = !isDiff || !hasFloatBlend;
-  toggleLaserBtn.hidden = !isDiff;
-  toggleSlitBtn.hidden = !isDiff;
+  laserSection.hidden = !isDiff;
+  simRow.hidden = !hasFloatBlend;
+  updateSceneUI();
   if (isDiff) {
     updateSimModeUI();
     updateLaserUI();
     updateSlitUI();
   }
 
-  suppressMoveScale = true;
-  sceneCamera.position.copy(preset.camPos);
-  controls.target.copy(preset.target);
-  controls.update();
-  suppressMoveScale = false;
-
-  isMoving = false;
-  resetAutoSpp();
-  updateTraceResolution(1.0);
-  resetCameraAccumulation();
-
-  toggleSceneBtn.textContent = `Cena: ${preset.name} (S)`;
+  resetCameraView();
 }
 
 function setDenoise(enabled) {
   denoiseEnabled = enabled;
-  toggleDenoiseBtn.textContent = `Denoise: ${enabled ? 'ON' : 'OFF'} (D)`;
+  toggleDenoiseBtn.textContent = `Denoise À-Trous: ${enabled ? 'ON' : 'OFF'}`;
+  toggleDenoiseBtn.classList.toggle('active', enabled);
   toggleDenoiseBtn.classList.toggle('off', !enabled);
 }
 
-function toggleForwardMode() {
-  if (activeSceneId !== 1 || !hasFloatBlend) return;
-  laserSimMode = laserSimMode === 0 ? 1 : 0;
+function setSimMode(nextSim) {
+  if (activeSceneId !== 1 || !hasFloatBlend || nextSim === laserSimMode) return;
+  laserSimMode = nextSim;
   updateSimModeUI();
   resetWorldPhotons();
   resetCameraAccumulation();
 }
 
-toggleSceneBtn.addEventListener('click', () => {
-  switchScene((activeSceneId + 1) % SCENE_PRESETS.length);
-});
-
-toggleSimBtn.addEventListener('click', toggleForwardMode);
-
-toggleLaserBtn.addEventListener('click', () => {
-  if (activeSceneId !== 1) return;
-  laserMode = (laserMode + 1) % LASER_MODES.length;
+function setLaserMode(nextLaser) {
+  if (activeSceneId !== 1 || nextLaser === laserMode) return;
+  laserMode = nextLaser;
   updateLaserUI();
   resetWorldPhotons();
   resetCameraAccumulation();
-});
+}
 
-toggleSlitBtn.addEventListener('click', () => {
+function toggleSlit1() {
   if (activeSceneId !== 1) return;
   slit1Blocked = slit1Blocked ? 0 : 1;
   updateSlitUI();
   resetWorldPhotons();
   resetCameraAccumulation();
+}
+
+sceneButtons.forEach((btn) => {
+  btn.addEventListener('click', () => switchScene(Number(btn.dataset.scene)));
 });
 
+simButtons.forEach((btn) => {
+  btn.addEventListener('click', () => setSimMode(Number(btn.dataset.sim)));
+});
+
+laserButtons.forEach((btn) => {
+  btn.addEventListener('click', () => setLaserMode(Number(btn.dataset.laser)));
+});
+
+toggleSlitBtn.addEventListener('click', toggleSlit1);
 toggleDenoiseBtn.addEventListener('click', () => setDenoise(!denoiseEnabled));
+resetCameraBtn.addEventListener('click', resetCameraView);
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
@@ -466,18 +531,14 @@ window.addEventListener('keydown', (e) => {
     setDenoise(!denoiseEnabled);
   } else if (k === 's') {
     switchScene((activeSceneId + 1) % SCENE_PRESETS.length);
-  } else if (k === 'f') {
-    toggleForwardMode();
+  } else if (k === 'f' && activeSceneId === 1) {
+    setSimMode(laserSimMode === 0 ? 1 : 0);
   } else if (k === 'l' && activeSceneId === 1) {
-    laserMode = (laserMode + 1) % LASER_MODES.length;
-    updateLaserUI();
-    resetWorldPhotons();
-    resetCameraAccumulation();
+    setLaserMode((laserMode + 1) % 4);
   } else if (k === 'b' && activeSceneId === 1) {
-    slit1Blocked = slit1Blocked ? 0 : 1;
-    updateSlitUI();
-    resetWorldPhotons();
-    resetCameraAccumulation();
+    toggleSlit1();
+  } else if (k === 'm') {
+    setMenuOpen(!menuOpen);
   }
 });
 
@@ -525,8 +586,14 @@ function handleResize() {
 }
 
 window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', () => {
+  setTimeout(handleResize, 120);
+});
 
-switchScene(0);
+// Inicializa na Cena 0
+updateSceneUI();
+resetCameraView();
+laserSection.hidden = true;
 
 const ATROUS_STEPS = [1, 2, 4];
 
@@ -616,7 +683,6 @@ function animate(now) {
   const useForwardPhotons = activeSceneId === 1 && laserSimMode === 1 && hasFloatBlend;
   frameSeed = (frameSeed + 1) | 0;
 
-  // 1. Fótons Forward de Superfície -> Atlas 3D (1024x1024, não reseta ao mover a câmera!)
   if (useForwardPhotons) {
     photonMaterial.uniforms.uPassType.value = 0;
     photonMaterial.uniforms.uFrameSeed.value = frameSeed;
@@ -640,7 +706,6 @@ function animate(now) {
     worldPhotonFrameCount += 1;
   }
 
-  // 2. Path Tracing (agora enxerga o Atlas 3D em reflexos, refrações e GI!)
   const activeMat = ptMesh.material;
   activeMat.uniforms.uAccumTexture.value = readAccum.textures[0];
   activeMat.uniforms.uSampleCount.value = sampleCount;
@@ -654,7 +719,6 @@ function animate(now) {
   renderer.setRenderTarget(writeAccum);
   renderer.render(ptScene, quadCamera);
 
-  // 3. Fótons Forward Volumétricos no Ar (Screen-Space com oclusão pelo G-Buffer)
   if (useForwardPhotons) {
     photonMaterial.uniforms.uPassType.value = 1;
     photonMaterial.uniforms.uViewProj.value.copy(viewProjMatrix);
@@ -683,7 +747,6 @@ function animate(now) {
   const nextSampleCount = sampleCount + samplesPerFrame;
   let finalHdrTexture = writeAccum.textures[0];
 
-  // 4. Denoiser À-Trous
   if (denoiseEnabled) {
     denoiseMaterial.uniforms.uGBufferTex.value = writeAccum.textures[1];
     denoiseMaterial.uniforms.uSampleCount.value = nextSampleCount;
@@ -712,7 +775,6 @@ function animate(now) {
     finalHdrTexture = denoiseA.texture;
   }
 
-  // 5. Display final (ACES + sRGB)
   displayMaterial.uniforms.uInputTexture.value = finalHdrTexture;
   if (!denoiseEnabled && useForwardPhotons) {
     displayMaterial.uniforms.uExtraTex.value = readAirPhoton.texture;
@@ -737,11 +799,11 @@ function animate(now) {
   sampleCount = nextSampleCount;
 
   const fps = Math.round(1000 / smoothedFrameMs);
-  const gpuInfo = lastGpuMs !== null ? ` | GPU: ${lastGpuMs.toFixed(1)}ms` : '';
-  const photonInfo = useForwardPhotons ? ` | Atlas: ${worldPhotonFrameCount}f` : '';
+  const gpuInfo = lastGpuMs !== null ? ` · ${lastGpuMs.toFixed(1)}ms` : '';
+  const photonInfo = useForwardPhotons ? ` · Atlas ${worldPhotonFrameCount}f` : '';
   statsEl.textContent =
-    `Amostras: ${sampleCount} (+${samplesPerFrame}/frame) | ` +
-    `${fps} FPS${gpuInfo}${photonInfo} | ${traceSize.x}x${traceSize.y} (${renderScale}x) | ${bufferLabel}`;
+    `${sampleCount} spp (+${samplesPerFrame}) · ${fps} FPS${gpuInfo}${photonInfo} · ` +
+    `${traceSize.x}x${traceSize.y} (${renderScale}x) · ${bufferLabel}`;
 }
 
 requestAnimationFrame(animate);

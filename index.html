@@ -2,25 +2,101 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>WebGL2 GPU Path Tracer — Cornell Box & Laser Real</title>
   </head>
   <body>
     <canvas id="gl-canvas"></canvas>
-    <div id="hud">
-      <div class="hud-header">
-        <span class="hud-title">WebGL2 Path Tracer (GLSL ES 3.00)</span>
-        <div class="hud-actions">
-          <button id="toggle-scene" type="button">Cena: Cornell Box (S)</button>
-          <button id="toggle-sim" type="button" hidden>Feixe: Híbrido (F)</button>
-          <button id="toggle-laser" type="button" hidden>Laser: Verde 532nm (L)</button>
-          <button id="toggle-slit" type="button" hidden>Fenda 1: Aberta (B)</button>
-          <button id="toggle-denoise" type="button">Denoise: ON (D)</button>
+
+    <!-- Barra superior flutuante (visível mesmo com menu fechado) -->
+    <div id="top-bar">
+      <button id="menu-open-btn" type="button" aria-label="Abrir controles" aria-expanded="false">
+        <span class="hamburger">☰</span>
+        <span>Controles</span>
+      </button>
+      <div id="stats" aria-live="polite">Amostras: 0 | Buffer: --</div>
+    </div>
+
+    <!-- Menu lateral retrátil -->
+    <aside id="side-menu" aria-label="Controles da simulação">
+      <div class="menu-header">
+        <div>
+          <div class="menu-title">Path Tracer WebGL2</div>
+          <div class="menu-subtitle">GLSL ES 3.00 · Tempo Real</div>
+        </div>
+        <button id="menu-close-btn" type="button" aria-label="Fechar controles">✕</button>
+      </div>
+
+      <div class="menu-body">
+        <section class="menu-section">
+          <div class="section-label">Cena <span class="kbd">(S)</span></div>
+          <div class="btn-group cols-2">
+            <button type="button" class="ctrl-btn" data-scene="0">Cornell Box</button>
+            <button type="button" class="ctrl-btn" data-scene="1">Difração Laser</button>
+          </div>
+        </section>
+
+        <section id="laser-section" class="menu-section" hidden>
+          <div id="sim-row" class="sub-block">
+            <div class="section-label">Simulação do Feixe <span class="kbd">(F)</span></div>
+            <div class="btn-group cols-2">
+              <button type="button" class="ctrl-btn" data-sim="0">Híbrido</button>
+              <button type="button" class="ctrl-btn" data-sim="1">Fótons Reais</button>
+            </div>
+          </div>
+
+          <div class="sub-block">
+            <div class="section-label">Laser (λ) <span class="kbd">(L)</span></div>
+            <div class="btn-group cols-2">
+              <button type="button" class="ctrl-btn laser-btn" data-laser="0">532nm Verde</button>
+              <button type="button" class="ctrl-btn laser-btn" data-laser="1">650nm Verm.</button>
+              <button type="button" class="ctrl-btn laser-btn" data-laser="2">405nm Viol.</button>
+              <button type="button" class="ctrl-btn laser-btn" data-laser="3">Branco</button>
+            </div>
+          </div>
+
+          <div class="sub-block">
+            <div class="section-label">Obturador Fenda 1 <span class="kbd">(B)</span></div>
+            <button id="toggle-slit" type="button" class="ctrl-btn full-btn">
+              Fenda 1: Aberta
+            </button>
+          </div>
+        </section>
+
+        <section class="menu-section">
+          <div class="section-label">Pós-processamento <span class="kbd">(D)</span></div>
+          <button id="toggle-denoise" type="button" class="ctrl-btn full-btn active">
+            Denoise À-Trous: ON
+          </button>
+        </section>
+
+        <section class="menu-section">
+          <div class="section-label">Câmera &amp; Tela</div>
+          <div class="btn-group cols-2">
+            <button id="reset-camera-btn" type="button" class="ctrl-btn">Reset Câmera</button>
+            <button id="fullscreen-btn" type="button" class="ctrl-btn">Tela Cheia</button>
+          </div>
+          <div class="menu-hint">
+            1 dedo / arrastar: orbitar · Pinça / scroll: zoom · 2 dedos / dir.: pan
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- Bloqueio obrigatório para modo retrato em dispositivos móveis -->
+    <div id="portrait-lock" role="alert">
+      <div class="rotate-card">
+        <div class="rotate-icon">📱↻</div>
+        <div class="rotate-title">Gire o celular para a horizontal</div>
+        <div class="rotate-desc">
+          Esta simulação em WebGL2 exige o aparelho deitado (modo paisagem) para acomodar o menu lateral e a cena 3D.
         </div>
       </div>
-      <div id="stats">Amostras: 0 | Buffer: --</div>
-      <div class="hud-hint">Arraste: orbitar · Scroll: zoom · S: cena · F: feixe real/híbrido · L: laser · B: tampar fenda · D: denoise</div>
     </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
