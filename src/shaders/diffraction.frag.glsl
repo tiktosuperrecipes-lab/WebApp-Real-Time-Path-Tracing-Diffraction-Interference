@@ -44,11 +44,18 @@ const int SURF_WALL_LEFT = 4;
 const int SURF_WALL_BACK = 5;
 const int SURF_WALL_RIGHT = 6;
 
+// Luminária suave do laboratório
 const vec3 LIGHT_MIN = vec3(0.15, 1.399, -0.25);
 const vec3 LIGHT_MAX = vec3(0.95, 1.399, 0.55);
 const vec3 LIGHT_NORMAL = vec3(0.0, -1.0, 0.0);
-const float LIGHT_EMISSION = 9.0;
+const float LIGHT_EMISSION = 6.5;
 const float LIGHT_AREA = 0.80 * 0.80;
+
+// Foco pequeno pontual no teto para revelar o arco-íris nítido do CD
+const vec3 SPOT_CENTER = vec3(0.66, 1.397, 0.28);
+const float SPOT_HALF = 0.035;
+const float SPOT_EMISSION = 380.0;
+const float SPOT_AREA = (SPOT_HALF * 2.0) * (SPOT_HALF * 2.0);
 
 const vec3 SLIT_CENTER = vec3(-1.10, -0.36, 0.05);
 const vec3 SLIT_AXIS = vec3(0.34394, 0.0, -0.93899);
@@ -65,9 +72,12 @@ const float SLIT2_MIN_U =  0.023;
 const float SLIT2_MAX_U =  0.049;
 const float SLIT_HALF_H =  0.15;
 
+// Dimensões físicas do CD (furo central vazado + anel acrílico + trilha de dados + borda)
 const vec3 DISC_CENTER = vec3(0.55, -0.795, 0.30);
-const float DISC_OUTER_R = 0.48;
-const float DISC_INNER_R = 0.09;
+const float DISC_HOLE_R = 0.065;
+const float DISC_HUB_R = 0.145;
+const float DISC_DATA_R = 0.468;
+const float DISC_OUTER_R = 0.480;
 const float GRATING_PITCH_NM = 1600.0;
 
 const vec3 GLASS_POS = vec3(0.45, -0.49, -0.38);
@@ -317,7 +327,8 @@ bool intersectDisc(vec3 ro, vec3 rd, float tMax, out float tHit, out float radia
   vec3 p = ro + rd * t;
   vec2 d = p.xz - DISC_CENTER.xz;
   float r = length(d);
-  if (r > DISC_OUTER_R) return false;
+  // Furo central vazado real
+  if (r < DISC_HOLE_R || r > DISC_OUTER_R) return false;
   tHit = t;
   radialDist = r;
   return true;
@@ -359,6 +370,13 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   float t;
   vec3 n;
 
+  // Foco pontual de teto (para difração nítida no CD)
+  if (intersectQuadY(ro, rd, SPOT_CENTER.y, -1.0, SPOT_CENTER.xz - SPOT_HALF, SPOT_CENTER.xz + SPOT_HALF, hit.t, t)) {
+    anyHit = true;
+    setHitSurface(hit, t, ro, rd, LIGHT_NORMAL, vec3(0.0), SPOT_EMISSION, 0.0, MAT_LIGHT, SURF_NONE);
+  }
+
+  // Luminária suave principal
   if (intersectQuadY(ro, rd, 1.399, -1.0, LIGHT_MIN.xz, LIGHT_MAX.xz, hit.t, t)) {
     anyHit = true;
     setHitSurface(hit, t, ro, rd, LIGHT_NORMAL, vec3(0.0), LIGHT_EMISSION, 0.0, MAT_LIGHT, SURF_NONE);
@@ -422,13 +440,16 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
     }
   }
 
+  // CD realista: anel central de policarbonato + camada refletiva de sulcos + borda
   float radialDist;
   if (intersectDisc(ro, rd, hit.t, t, radialDist)) {
     anyHit = true;
-    if (radialDist < DISC_INNER_R) {
-      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.22), 0.0, 0.2, MAT_METAL, SURF_NONE);
+    if (radialDist < DISC_HUB_R) {
+      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.08, 0.085, 0.095), 0.0, 0.05, MAT_METAL, SURF_NONE);
+    } else if (radialDist > DISC_DATA_R) {
+      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.24), 0.0, 0.04, MAT_METAL, SURF_NONE);
     } else {
-      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.90), 0.0, 0.04, MAT_GRATING, SURF_NONE);
+      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.92), 0.0, 0.05, MAT_GRATING, SURF_NONE);
     }
   }
 
@@ -445,7 +466,6 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   return anyHit;
 }
 
-// Consulta o Atlas 3D de fótons forward (visível direto, em reflexos, refrações e GI!)
 vec3 sampleWorldPhotonMap(HitInfo hit) {
   vec2 uv = vec2(-1.0);
   if (hit.surfaceId == SURF_SCREEN) {
@@ -457,7 +477,6 @@ vec3 sampleWorldPhotonMap(HitInfo hit) {
     float sv = (hit.pos.z + 1.40) / 3.20;
     uv = vec2(0.52 + su * 0.46, 0.52 + sv * 0.46);
   } else if (hit.surfaceId == SURF_SLIT_PLATE) {
-    // Somente a face voltada para o laser recebe os fótons frontais (zero vazamento no verso)
     if (dot(hit.normal, -SLIT_AXIS) < 0.5) return vec3(0.0);
     vec3 rel = hit.pos - SLIT_CENTER;
     float su = (dot(rel, SLIT_TANGENT) + 0.25) / 0.50;
@@ -481,7 +500,8 @@ vec3 sampleWorldPhotonMap(HitInfo hit) {
   return texture(uWorldPhotonTex, uv).rgb;
 }
 
-float evalGratingBRDF(vec3 hitPos, vec3 L, vec3 V, float lambda) {
+// Difração nítida no CD (ordens m = +-1, +-2 iluminadas pelo foco pontual; m = 0 é feito pelo bounce espelhado)
+float sampleGratingDiffraction(vec3 hitPos, vec3 V, float lambda, inout uint rng) {
   vec2 d = hitPos.xz - DISC_CENTER.xz;
   float lenD = length(d);
   if (lenD < 1e-5) return 0.0;
@@ -489,25 +509,39 @@ float evalGratingBRDF(vec3 hitPos, vec3 L, vec3 V, float lambda) {
   vec3 R = vec3(d.x / lenD, 0.0, d.y / lenD);
   vec3 T = vec3(-R.z, 0.0, R.x);
 
+  float sx = SPOT_CENTER.x + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
+  float sz = SPOT_CENTER.z + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
+  vec3 spotPos = vec3(sx, SPOT_CENTER.y, sz);
+
+  vec3 toSpot = spotPos - hitPos;
+  float dist2 = dot(toSpot, toSpot);
+  float dist = sqrt(dist2);
+  vec3 L = toSpot / dist;
+
+  float cosSurf = L.y;
+  float cosLight = -L.y;
+  if (cosSurf <= 0.0 || cosLight <= 0.0) return 0.0;
+
+  if (traceShadow(hitPos + vec3(0.0, EPS, 0.0), L, dist - EPS * 2.0)) return 0.0;
+
   vec3 Hvec = L + V;
   float u = dot(R, Hvec);
   float v = dot(T, Hvec);
 
-  float specularM0 = 0.25 * exp(-0.5 * (u * u + v * v) / (0.045 * 0.045));
   float diffracted = 0.0;
-
   for (int m = -2; m <= 2; m++) {
     if (m == 0) continue;
     float uTarget = float(m) * (lambda / GRATING_PITCH_NM);
     float du = u - uTarget;
-    float orderWeight = (abs(m) == 1) ? 1.8 : 0.75;
-    diffracted += orderWeight * exp(-0.5 * ((du * du) / (0.028 * 0.028) + (v * v) / (0.040 * 0.040)));
+    float orderWeight = (abs(m) == 1) ? 14.0 : 5.5;
+    diffracted += orderWeight * exp(-0.5 * ((du * du) / (0.013 * 0.013) + (v * v) / (0.018 * 0.018)));
   }
 
-  return specularM0 + diffracted;
+  float geom = (cosSurf * cosLight) / dist2;
+  return diffracted * SPOT_EMISSION * geom * SPOT_AREA;
 }
 
-float sampleOverheadLight(HitInfo hit, vec3 V, float lambda, inout uint rng) {
+float sampleOverheadLight(HitInfo hit, float lambda, inout uint rng) {
   float lx = mix(LIGHT_MIN.x, LIGHT_MAX.x, rand(rng));
   float lz = mix(LIGHT_MIN.z, LIGHT_MAX.z, rand(rng));
   vec3 lightPos = vec3(lx, LIGHT_MIN.y, lz);
@@ -524,11 +558,6 @@ float sampleOverheadLight(HitInfo hit, vec3 V, float lambda, inout uint rng) {
   if (traceShadow(hit.pos + hit.normal * EPS, L, dist - EPS * 2.0)) return 0.0;
 
   float geom = (cosSurf * cosLight) / dist2;
-
-  if (hit.matType == MAT_GRATING) {
-    return evalGratingBRDF(hit.pos, L, V, lambda) * LIGHT_EMISSION * geom * LIGHT_AREA;
-  }
-
   float refl = evalSpectrumFromRGB(hit.albedo, lambda);
   return (refl * INV_PI) * LIGHT_EMISSION * geom * LIGHT_AREA;
 }
@@ -709,7 +738,7 @@ vec3 tracePath(vec3 ro, vec3 rd, float roomLambda, float laserLambda, inout uint
     }
 
     if (hit.matType == MAT_DIFFUSE) {
-      float roomDirect = sampleOverheadLight(hit, -rd, roomLambda, rng);
+      float roomDirect = sampleOverheadLight(hit, roomLambda, rng);
       radianceRGB += roomSpectrumRGB * (throughput * roomDirect);
 
       if (uLaserSimMode == 0) {
@@ -717,7 +746,6 @@ vec3 tracePath(vec3 ro, vec3 rd, float roomLambda, float laserLambda, inout uint
         float reflLaser = evalSpectrumFromRGB(hit.albedo, laserLambda);
         radianceRGB += laserSpectrumRGB * (throughput * reflLaser * INV_PI * laserHuygens * 5.2 * laserGain);
       } else if (hit.surfaceId != SURF_NONE) {
-        // Lê os fótons reais acumulados no Atlas 3D (funciona para visão direta, reflexos, refrações e GI!)
         radianceRGB += throughput * sampleWorldPhotonMap(hit);
       }
 
@@ -726,23 +754,30 @@ vec3 tracePath(vec3 ro, vec3 rd, float roomLambda, float laserLambda, inout uint
       throughput *= evalSpectrumFromRGB(hit.albedo, roomLambda);
       lastBounceSpecular = false;
     } else if (hit.matType == MAT_GRATING) {
-      float gratingDirect = sampleOverheadLight(hit, -rd, roomLambda, rng);
+      // NEE: ordens difratadas (+-1, +-2) pelo foco pontual
+      float gratingDirect = sampleGratingDiffraction(hit.pos, -rd, roomLambda, rng);
       radianceRGB += roomSpectrumRGB * (throughput * gratingDirect);
 
-      vec3 refl = reflect(rd, hit.normal);
-      vec2 d = hit.pos.xz - DISC_CENTER.xz;
-      float lenD = max(length(d), 1e-5);
-      vec3 R = vec3(d.x / lenD, 0.0, d.y / lenD);
+      // Bounce especular m = 0 (espelhado nítido do vidro, paredes e luzes)
+      float alpha = max(hit.roughness * hit.roughness, 0.003);
+      float alpha2 = alpha * alpha;
+      vec3 V = -rd;
+      vec3 H = sampleGGXHalfVector(hit.normal, alpha, rng);
+      vec3 L = reflect(-V, H);
 
-      float pick = rand(rng);
-      float order = (pick < 0.4) ? 0.0 : ((pick < 0.7) ? 1.0 : -1.0);
-      vec3 jitterDir = sampleGGXHalfVector(hit.normal, 0.06, rng);
-      vec3 nextDir = normalize(reflect(rd, jitterDir) + R * (order * roomLambda / GRATING_PITCH_NM));
+      float NoL = dot(hit.normal, L);
+      float NoV = dot(hit.normal, V);
+      float NoH = dot(hit.normal, H);
+      float VoH = dot(V, H);
+      if (NoL <= 0.0 || NoV <= 1e-5 || NoH <= 1e-5 || VoH <= 0.0) break;
 
-      if (dot(nextDir, hit.normal) <= 0.0) nextDir = refl;
+      float F = fresnelSchlickScalar(VoH, 0.86);
+      float G = smithG1(NoV, alpha2) * smithG1(NoL, alpha2);
+      float weight = F * ((G * VoH) / (NoH * NoV));
+
       ro = hit.pos + hit.normal * EPS;
-      rd = nextDir;
-      throughput *= 0.80;
+      rd = normalize(L);
+      throughput *= clamp(weight, 0.0, 1.0);
       lastBounceSpecular = true;
     } else if (hit.matType == MAT_METAL) {
       float alpha = max(hit.roughness * hit.roughness, 0.002);
