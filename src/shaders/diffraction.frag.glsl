@@ -51,10 +51,11 @@ const vec3 LIGHT_NORMAL = vec3(0.0, -1.0, 0.0);
 const float LIGHT_EMISSION = 6.5;
 const float LIGHT_AREA = 0.80 * 0.80;
 
-// Foco pequeno pontual no teto para revelar o arco-íris nítido do CD
-const vec3 SPOT_CENTER = vec3(0.66, 1.397, 0.28);
-const float SPOT_HALF = 0.035;
-const float SPOT_EMISSION = 380.0;
+// Foco angular no teto para revelar os arcos arco-íris do CD em qualquer ângulo (inclusive de cima)
+const vec3 SPOT_CENTER = vec3(1.35, 1.397, -0.55);
+const float SPOT_HALF = 0.045;
+const float SPOT_EMISSION = 420.0;
+const float SPOT_VISIBLE_EMISSION = 18.0;
 const float SPOT_AREA = (SPOT_HALF * 2.0) * (SPOT_HALF * 2.0);
 
 const vec3 SLIT_CENTER = vec3(-1.10, -0.36, 0.05);
@@ -72,7 +73,7 @@ const float SLIT2_MIN_U =  0.023;
 const float SLIT2_MAX_U =  0.049;
 const float SLIT_HALF_H =  0.15;
 
-// Dimensões físicas do CD (furo central vazado + anel acrílico + trilha de dados + borda)
+// Dimensões físicas do CD
 const vec3 DISC_CENTER = vec3(0.55, -0.795, 0.30);
 const float DISC_HOLE_R = 0.065;
 const float DISC_HUB_R = 0.145;
@@ -327,7 +328,6 @@ bool intersectDisc(vec3 ro, vec3 rd, float tMax, out float tHit, out float radia
   vec3 p = ro + rd * t;
   vec2 d = p.xz - DISC_CENTER.xz;
   float r = length(d);
-  // Furo central vazado real
   if (r < DISC_HOLE_R || r > DISC_OUTER_R) return false;
   tHit = t;
   radialDist = r;
@@ -370,13 +370,12 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   float t;
   vec3 n;
 
-  // Foco pontual de teto (para difração nítida no CD)
+  // Foco de luz visível no teto (emissão visual controlada para evitar fireflies no bounce especular)
   if (intersectQuadY(ro, rd, SPOT_CENTER.y, -1.0, SPOT_CENTER.xz - SPOT_HALF, SPOT_CENTER.xz + SPOT_HALF, hit.t, t)) {
     anyHit = true;
-    setHitSurface(hit, t, ro, rd, LIGHT_NORMAL, vec3(0.0), SPOT_EMISSION, 0.0, MAT_LIGHT, SURF_NONE);
+    setHitSurface(hit, t, ro, rd, LIGHT_NORMAL, vec3(0.0), SPOT_VISIBLE_EMISSION, 0.0, MAT_LIGHT, SURF_NONE);
   }
 
-  // Luminária suave principal
   if (intersectQuadY(ro, rd, 1.399, -1.0, LIGHT_MIN.xz, LIGHT_MAX.xz, hit.t, t)) {
     anyHit = true;
     setHitSurface(hit, t, ro, rd, LIGHT_NORMAL, vec3(0.0), LIGHT_EMISSION, 0.0, MAT_LIGHT, SURF_NONE);
@@ -440,7 +439,6 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
     }
   }
 
-  // CD realista: anel central de policarbonato + camada refletiva de sulcos + borda
   float radialDist;
   if (intersectDisc(ro, rd, hit.t, t, radialDist)) {
     anyHit = true;
@@ -449,7 +447,7 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
     } else if (radialDist > DISC_DATA_R) {
       setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.24), 0.0, 0.04, MAT_METAL, SURF_NONE);
     } else {
-      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.92), 0.0, 0.05, MAT_GRATING, SURF_NONE);
+      setHitSurface(hit, t, ro, rd, vec3(0.0, 1.0, 0.0), vec3(0.92), 0.0, 0.055, MAT_GRATING, SURF_NONE);
     }
   }
 
@@ -500,47 +498,6 @@ vec3 sampleWorldPhotonMap(HitInfo hit) {
   return texture(uWorldPhotonTex, uv).rgb;
 }
 
-// Difração nítida no CD (ordens m = +-1, +-2 iluminadas pelo foco pontual; m = 0 é feito pelo bounce espelhado)
-float sampleGratingDiffraction(vec3 hitPos, vec3 V, float lambda, inout uint rng) {
-  vec2 d = hitPos.xz - DISC_CENTER.xz;
-  float lenD = length(d);
-  if (lenD < 1e-5) return 0.0;
-
-  vec3 R = vec3(d.x / lenD, 0.0, d.y / lenD);
-  vec3 T = vec3(-R.z, 0.0, R.x);
-
-  float sx = SPOT_CENTER.x + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
-  float sz = SPOT_CENTER.z + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
-  vec3 spotPos = vec3(sx, SPOT_CENTER.y, sz);
-
-  vec3 toSpot = spotPos - hitPos;
-  float dist2 = dot(toSpot, toSpot);
-  float dist = sqrt(dist2);
-  vec3 L = toSpot / dist;
-
-  float cosSurf = L.y;
-  float cosLight = -L.y;
-  if (cosSurf <= 0.0 || cosLight <= 0.0) return 0.0;
-
-  if (traceShadow(hitPos + vec3(0.0, EPS, 0.0), L, dist - EPS * 2.0)) return 0.0;
-
-  vec3 Hvec = L + V;
-  float u = dot(R, Hvec);
-  float v = dot(T, Hvec);
-
-  float diffracted = 0.0;
-  for (int m = -2; m <= 2; m++) {
-    if (m == 0) continue;
-    float uTarget = float(m) * (lambda / GRATING_PITCH_NM);
-    float du = u - uTarget;
-    float orderWeight = (abs(m) == 1) ? 14.0 : 5.5;
-    diffracted += orderWeight * exp(-0.5 * ((du * du) / (0.013 * 0.013) + (v * v) / (0.018 * 0.018)));
-  }
-
-  float geom = (cosSurf * cosLight) / dist2;
-  return diffracted * SPOT_EMISSION * geom * SPOT_AREA;
-}
-
 float sampleOverheadLight(HitInfo hit, float lambda, inout uint rng) {
   float lx = mix(LIGHT_MIN.x, LIGHT_MAX.x, rand(rng));
   float lz = mix(LIGHT_MIN.z, LIGHT_MAX.z, rand(rng));
@@ -560,6 +517,55 @@ float sampleOverheadLight(HitInfo hit, float lambda, inout uint rng) {
   float geom = (cosSurf * cosLight) / dist2;
   float refl = evalSpectrumFromRGB(hit.albedo, lambda);
   return (refl * INV_PI) * LIGHT_EMISSION * geom * LIGHT_AREA;
+}
+
+// Difração nítida em leques de CD (iluminada pelo foco inclinado + sutil base de alumínio)
+float sampleGratingDiffraction(HitInfo hit, vec3 V, float lambda, inout uint rng) {
+  vec2 d = hit.pos.xz - DISC_CENTER.xz;
+  float lenD = length(d);
+  if (lenD < 1e-5) return 0.0;
+
+  vec3 R = vec3(d.x / lenD, 0.0, d.y / lenD);
+  vec3 T = vec3(-R.z, 0.0, R.x);
+
+  float sx = SPOT_CENTER.x + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
+  float sz = SPOT_CENTER.z + (rand(rng) * 2.0 - 1.0) * SPOT_HALF;
+  vec3 spotPos = vec3(sx, SPOT_CENTER.y, sz);
+
+  vec3 toSpot = spotPos - hit.pos;
+  float dist2 = dot(toSpot, toSpot);
+  float dist = sqrt(dist2);
+  vec3 L = toSpot / dist;
+
+  float cosSurf = L.y;
+  float cosLight = -L.y;
+  float rainbow = 0.0;
+
+  if (cosSurf > 0.0 && cosLight > 0.0 && !traceShadow(hit.pos + vec3(0.0, EPS, 0.0), L, dist - EPS * 2.0)) {
+    vec3 Hvec = L + V;
+    float u = dot(R, Hvec);
+    float v = dot(T, Hvec);
+
+    float diffracted = 0.0;
+    for (int m = -2; m <= 2; m++) {
+      if (m == 0) continue;
+      float uTarget = float(m) * (lambda / GRATING_PITCH_NM);
+      float du = u - uTarget;
+      float orderWeight = (abs(m) == 1) ? 24.0 : 11.0;
+      // sigmaU = 0.020 (cores puras e nítidas); sigmaV = 0.18 (asas largas de CD visíveis de qualquer ângulo)
+      diffracted += orderWeight * exp(-0.5 * ((du * du) / (0.020 * 0.020) + (v * v) / (0.18 * 0.18)));
+    }
+
+    float geom = (cosSurf * cosLight) / dist2;
+    rainbow = diffracted * SPOT_EMISSION * geom * SPOT_AREA;
+  }
+
+  // Leve brilho prateado da camada de alumínio sob a luz ambiente da sala
+  HitInfo sheenHit = hit;
+  sheenHit.albedo = vec3(0.075);
+  float aluminumSheen = sampleOverheadLight(sheenHit, lambda, rng);
+
+  return rainbow + aluminumSheen;
 }
 
 float sampleDoubleSlitHuygens(
@@ -754,11 +760,9 @@ vec3 tracePath(vec3 ro, vec3 rd, float roomLambda, float laserLambda, inout uint
       throughput *= evalSpectrumFromRGB(hit.albedo, roomLambda);
       lastBounceSpecular = false;
     } else if (hit.matType == MAT_GRATING) {
-      // NEE: ordens difratadas (+-1, +-2) pelo foco pontual
-      float gratingDirect = sampleGratingDiffraction(hit.pos, -rd, roomLambda, rng);
+      float gratingDirect = sampleGratingDiffraction(hit, -rd, roomLambda, rng);
       radianceRGB += roomSpectrumRGB * (throughput * gratingDirect);
 
-      // Bounce especular m = 0 (espelhado nítido do vidro, paredes e luzes)
       float alpha = max(hit.roughness * hit.roughness, 0.003);
       float alpha2 = alpha * alpha;
       vec3 V = -rd;
