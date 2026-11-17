@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebGL2 GPU Path Tracer — Cornell Box & Laser Real</title>
+  </head>
+  <body>
+    <canvas id="gl-canvas"></canvas>
+    <div id="hud">
+      <div class="hud-header">
+        <span class="hud-title">WebGL2 Path Tracer (GLSL ES 3.00)</span>
+        <div class="hud-actions">
+          <button id="toggle-scene" type="button">Cena: Cornell Box (S)</button>
+          <button id="toggle-sim" type="button" hidden>Feixe: Híbrido (F)</button>
+          <button id="toggle-laser" type="button" hidden>Laser: Verde 532nm (L)</button>
+          <button id="toggle-slit" type="button" hidden>Fenda 1: Aberta (B)</button>
+          <button id="toggle-denoise" type="button">Denoise: ON (D)</button>
+        </div>
+      </div>
+      <div id="stats">Amostras: 0 | Buffer: --</div>
+      <div class="hud-hint">Arraste: orbitar · Scroll: zoom · S: cena · F: feixe real/híbrido · L: laser · B: tampar fenda · D: denoise</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

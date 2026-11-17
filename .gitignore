@@ -1,0 +1,56 @@
+# ===== Dependencies =====
+node_modules/
+jspm_packages/
+
+# ===== Build output =====
+dist/
+dist-ssr/
+build/
+out/
+*.tsbuildinfo
+
+# ===== Vite cache =====
+.vite/
+node_modules/.vite/
+node_modules/.cache/
+
+# ===== Logs =====
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+
+# ===== Package manager / misc =====
+.npm/
+.eslintcache
+.stylelintcache
+*.local
+
+# ===== Editor / IDE =====
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ===== OS files =====
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.stackdump
