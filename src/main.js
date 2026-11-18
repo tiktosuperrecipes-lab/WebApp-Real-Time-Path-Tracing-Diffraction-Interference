@@ -29,6 +29,7 @@ const pacer = createFramePacer({ gl, timerExt, initialFps: 60 });
 
 const simState = {
   laserMode: 0,
+  customLaserLambda: 532.0,
   slit1Blocked: 0,
   slitPlateEnabled: 1,
   laserBeamRadius: 0.056,
@@ -125,13 +126,25 @@ const hud = createHudController({
   onSelectScene: switchToScene,
   onSelectLaserMode(nextLaser) {
     if (sceneManager.activeSceneId !== 1) return;
-    const target = nextLaser === null ? (simState.laserMode + 1) % 4 : nextLaser;
+    const target = nextLaser === null ? (simState.laserMode >= 5 ? 0 : simState.laserMode + 1) : nextLaser;
     if (target === simState.laserMode) return;
     simState.laserMode = target;
+    if (target === 0) simState.customLaserLambda = 532.0;
+    else if (target === 1) simState.customLaserLambda = 650.0;
+    else if (target === 2) simState.customLaserLambda = 405.0;
     pipeline.syncLaserUniforms(simState);
     hud.syncLaserUI(simState);
     resetWorldPhotons();
     resetCameraAccumulation();
+  },
+  onChangeLaserFrequency(nm) {
+    if (sceneManager.activeSceneId !== 1) return;
+    simState.laserMode = 6;
+    simState.customLaserLambda = nm;
+    pipeline.syncLaserUniforms(simState);
+    hud.syncLaserUI(simState);
+    resetWorldPhotons();
+    notifyInteractiveMove();
   },
   onChangeLaserBeamRadius(radius) {
     if (sceneManager.activeSceneId !== 1) return;
@@ -238,6 +251,7 @@ const hud = createHudController({
     sceneManager.resetCameraView();
     if (sceneManager.activeSceneId === 1) {
       simState.laserMode = 0;
+      simState.customLaserLambda = 532.0;
       simState.slit1Blocked = 0;
       simState.slitPlateEnabled = 1;
       simState.laserBeamRadius = 0.056;

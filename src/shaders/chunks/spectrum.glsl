@@ -21,13 +21,28 @@ const mat3 XYZ_TO_SRGB = mat3(
 );
 
 vec3 wavelengthToLinearRGB(float lambda) {
+  // Fora do visivel [380, 720] nm: representacao em falsa cor de sensor UV / IR
+  if (lambda < 380.0) {
+    float t = clamp((380.0 - lambda) / 160.0, 0.0, 1.0);
+    vec3 edgeViolet = max(XYZ_TO_SRGB * (wavelengthToXYZ(385.0) * vec3(3.028, 3.179, 3.465)), vec3(0.0));
+    vec3 uvFalse = vec3(0.55, 0.14, 1.10);
+    return mix(edgeViolet, uvFalse, smoothstep(0.0, 0.35, t));
+  }
+  if (lambda > 720.0) {
+    float t = clamp((lambda - 720.0) / 390.0, 0.0, 1.0);
+    vec3 edgeRed = max(XYZ_TO_SRGB * (wavelengthToXYZ(695.0) * vec3(3.028, 3.179, 3.465)), vec3(0.0));
+    vec3 irFalse = vec3(0.85, 0.09, 0.14);
+    return mix(edgeRed, irFalse, smoothstep(0.0, 0.30, t));
+  }
+
   vec3 xyz = wavelengthToXYZ(lambda) * vec3(3.028, 3.179, 3.465);
   return XYZ_TO_SRGB * xyz;
 }
 
 float evalSpectrumFromRGB(vec3 rgb, float lambda) {
-  float b = exp(-0.5 * pow((lambda - 450.0) / 32.0, 2.0));
-  float g = exp(-0.5 * pow((lambda - 540.0) / 35.0, 2.0));
-  float r = exp(-0.5 * pow((lambda - 625.0) / 38.0, 2.0));
+  float lam = clamp(lambda, 405.0, 680.0);
+  float b = exp(-0.5 * pow((lam - 450.0) / 32.0, 2.0));
+  float g = exp(-0.5 * pow((lam - 540.0) / 35.0, 2.0));
+  float r = exp(-0.5 * pow((lam - 625.0) / 38.0, 2.0));
   return dot(rgb, vec3(r, g, b)) / (r + g + b + 1e-5);
 }

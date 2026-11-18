@@ -1,8 +1,21 @@
+uniform float uCustomLaserLambda;
+
 float sampleLaserWavelength(float roomLambda, inout uint rng) {
   if (uLaserMode == 0) return 532.0 + (rand(rng) - 0.5) * 3.0;
   if (uLaserMode == 1) return 650.0 + (rand(rng) - 0.5) * 3.0;
   if (uLaserMode == 2) return 405.0 + (rand(rng) - 0.5) * 3.0;
-  return roomLambda;
+  if (uLaserMode == 3) return roomLambda;
+  if (uLaserMode == 4) {
+    float base = (rand(rng) < 0.5) ? 650.0 : 405.0;
+    return base + (rand(rng) - 0.5) * 3.0;
+  }
+  if (uLaserMode == 5) {
+    float r = rand(rng);
+    float base = (r < 0.3333) ? 650.0 : ((r < 0.6667) ? 532.0 : 405.0);
+    return base + (rand(rng) - 0.5) * 3.0;
+  }
+  float customLam = (uCustomLaserLambda > 50.0) ? uCustomLaserLambda : 532.0;
+  return customLam + (rand(rng) - 0.5) * 3.0;
 }
 
 vec3 sampleOverheadLightRGB(HitInfo hit, inout uint rng) {
@@ -114,7 +127,7 @@ vec3 sampleGratingDiffractionRGB(HitInfo hit, vec3 V, float laserLambda, inout u
   vec3 scrLaserRad = sampleScreenPhotonAt(scrPos);
 
   if (dot(scrLaserRad, vec3(1.0)) > 1e-5) {
-    bool mono = (uLaserMode != 3);
+    bool mono = (uLaserMode < 3) || (uLaserMode == 6);
     rainbowRGB += evalGratingFromLight(
       hit.pos, V, R, T,
       scrPos, vec3(0.0, 0.0, 1.0), scrArea, scrLaserRad,

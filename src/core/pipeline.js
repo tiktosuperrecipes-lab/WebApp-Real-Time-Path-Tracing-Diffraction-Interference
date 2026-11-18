@@ -40,6 +40,7 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
       uTanHalfFov: { value: Math.tan(THREE.MathUtils.degToRad(sceneManager.camera.fov * 0.5)) },
       uFrameSeed: { value: 1 },
       uLaserMode: { value: 0 },
+      uCustomLaserLambda: { value: 532.0 },
       uSlit1Blocked: { value: 0 },
       uSlitPlateEnabled: { value: 1 },
       uPhotonCount: { value: PHOTON_COUNT },
@@ -131,6 +132,7 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
 
   function syncLaserUniforms({
     laserMode,
+    customLaserLambda = 532.0,
     slit1Blocked,
     slitPlateEnabled = 1,
     laserBeamRadius = 0.056,
@@ -141,12 +143,14 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     const diffMat = sceneManager.materials[1];
     if (diffMat) {
       diffMat.uniforms.uLaserMode.value = laserMode;
+      diffMat.uniforms.uCustomLaserLambda.value = customLaserLambda;
       diffMat.uniforms.uSlit1Blocked.value = slit1Blocked;
       diffMat.uniforms.uSlitPlateEnabled.value = slitPlateEnabled;
       diffMat.uniforms.uLaserBeamRadius.value = laserBeamRadius;
       diffMat.uniforms.uLaserDir.value.copy(basis.dir);
     }
     photonMaterial.uniforms.uLaserMode.value = laserMode;
+    photonMaterial.uniforms.uCustomLaserLambda.value = customLaserLambda;
     photonMaterial.uniforms.uSlit1Blocked.value = slit1Blocked;
     photonMaterial.uniforms.uSlitPlateEnabled.value = slitPlateEnabled;
     photonMaterial.uniforms.uLaserBeamRadius.value = laserBeamRadius;

@@ -1,8 +1,25 @@
 import { MAX_FPS_SLIDER } from '../core/framePacer.js';
 import { LENS_CATALOG } from '../scenes/lensInteraction.js';
 
+const C_NM_THZ = 299792.458;
+
 function normalizeDeg(deg) {
   return ((((deg + 180) % 360) + 360) % 360) - 180;
+}
+
+function formatFreqText(laserMode, customLaserLambda) {
+  if (laserMode === 0) return '564 THz · 532 nm';
+  if (laserMode === 1) return '461 THz · 650 nm';
+  if (laserMode === 2) return '740 THz · 405 nm';
+  if (laserMode === 3) return '416–789 THz · Branco';
+  if (laserMode === 4) return 'Dual 650 + 405 nm';
+  if (laserMode === 5) return 'Triplo 650·532·405';
+
+  const nm = Math.round(customLaserLambda);
+  const thz = Math.round(C_NM_THZ / customLaserLambda);
+  if (nm < 380) return `${thz} THz · ${nm} nm (UV)`;
+  if (nm > 720) return `${thz} THz · ${nm} nm (IR)`;
+  return `${thz} THz · ${nm} nm`;
 }
 
 export function createHudController({
@@ -11,6 +28,7 @@ export function createHudController({
   initialCleanMotion,
   onSelectScene,
   onSelectLaserMode,
+  onChangeLaserFrequency,
   onChangeLaserBeamRadius,
   onChangeLaserYaw,
   onChangeLaserPitch,
@@ -34,6 +52,8 @@ export function createHudController({
   const sceneButtons = Array.from(document.querySelectorAll('[data-scene]'));
   const laserSection = document.getElementById('laser-section');
   const laserButtons = Array.from(document.querySelectorAll('[data-laser]'));
+  const laserFreqSlider = document.getElementById('laser-freq-slider');
+  const laserFreqValue = document.getElementById('laser-freq-value');
 
   const laserDiameterSlider = document.getElementById('laser-diameter-slider');
   const laserDiameterValue = document.getElementById('laser-diameter-value');
@@ -118,6 +138,7 @@ export function createHudController({
 
   function syncLaserUI({
     laserMode,
+    customLaserLambda,
     slit1Blocked,
     slitPlateEnabled,
     laserBeamRadius,
@@ -125,6 +146,12 @@ export function createHudController({
     laserPitchDeg
   }) {
     laserButtons.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.laser) === laserMode));
+
+    if (laserMode === 0) laserFreqSlider.value = '564';
+    else if (laserMode === 1) laserFreqSlider.value = '461';
+    else if (laserMode === 2) laserFreqSlider.value = '740';
+    else if (laserMode === 6) laserFreqSlider.value = String(Math.round(C_NM_THZ / customLaserLambda));
+    laserFreqValue.textContent = formatFreqText(laserMode, customLaserLambda);
 
     laserDiameterSlider.value = String(laserBeamRadius);
     laserDiameterValue.textContent = `${(laserBeamRadius * 200).toFixed(1)} cm`;
@@ -172,6 +199,13 @@ export function createHudController({
     toggleCleanMoveBtn.classList.toggle('active', enabled);
     toggleCleanMoveBtn.classList.toggle('off', !enabled);
   }
+
+  laserFreqSlider.addEventListener('input', () => {
+    const thz = Number(laserFreqSlider.value);
+    const nm = C_NM_THZ / thz;
+    laserFreqValue.textContent = formatFreqText(6, nm);
+    onChangeLaserFrequency(nm);
+  });
 
   laserDiameterSlider.addEventListener('input', () => {
     const r = Number(laserDiameterSlider.value);

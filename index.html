@@ -47,6 +47,24 @@
               <button type="button" class="ctrl-btn laser-btn" data-laser="1">650nm Verm.</button>
               <button type="button" class="ctrl-btn laser-btn" data-laser="2">405nm Viol.</button>
               <button type="button" class="ctrl-btn laser-btn" data-laser="3">Branco</button>
+              <button type="button" class="ctrl-btn laser-btn" data-laser="4">Dual R+V</button>
+              <button type="button" class="ctrl-btn laser-btn" data-laser="5">Triplo RGB</button>
+            </div>
+
+            <div class="slider-block">
+              <div class="slider-header">
+                <span>Frequência</span>
+                <span id="laser-freq-value" class="slider-val">564 THz · 532 nm</span>
+              </div>
+              <input
+                id="laser-freq-slider"
+                type="range"
+                min="270"
+                max="1360"
+                step="5"
+                value="564"
+                aria-label="Frequência da Luz em THz"
+              />
             </div>
           </div>
 

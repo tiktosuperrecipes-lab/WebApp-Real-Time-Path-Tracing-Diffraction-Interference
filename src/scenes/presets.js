@@ -85,6 +85,7 @@ export function createSceneManager({ domElement, traceSize, blackTex, onCameraCh
         ? {
             uWorldPhotonTex: { value: blackTex },
             uLaserMode: { value: laserState.laserMode },
+            uCustomLaserLambda: { value: laserState.customLaserLambda ?? 532.0 },
             uSlit1Blocked: { value: laserState.slit1Blocked },
             uSlitPlateEnabled: { value: laserState.slitPlateEnabled ?? 1 },
             uLaserDir: { value: basis.dir.clone() },

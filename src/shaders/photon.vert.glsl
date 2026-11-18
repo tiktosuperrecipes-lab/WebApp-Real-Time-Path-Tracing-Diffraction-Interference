@@ -9,6 +9,7 @@ uniform vec2 uResolution;
 uniform float uTanHalfFov;
 uniform int uFrameSeed;
 uniform int uLaserMode;
+uniform float uCustomLaserLambda;
 uniform int uSlit1Blocked;
 uniform int uSlitPlateEnabled;
 uniform int uPhotonCount;
@@ -89,7 +90,18 @@ float sampleLaserWavelength(inout uint rng) {
   if (uLaserMode == 0) return 532.0 + (rand(rng) - 0.5) * 3.0;
   if (uLaserMode == 1) return 650.0 + (rand(rng) - 0.5) * 3.0;
   if (uLaserMode == 2) return 405.0 + (rand(rng) - 0.5) * 3.0;
-  return mix(380.0, 720.0, rand(rng));
+  if (uLaserMode == 3) return mix(380.0, 720.0, rand(rng));
+  if (uLaserMode == 4) {
+    float base = (rand(rng) < 0.5) ? 650.0 : 405.0;
+    return base + (rand(rng) - 0.5) * 3.0;
+  }
+  if (uLaserMode == 5) {
+    float r = rand(rng);
+    float base = (r < 0.3333) ? 650.0 : ((r < 0.6667) ? 532.0 : 405.0);
+    return base + (rand(rng) - 0.5) * 3.0;
+  }
+  float customLam = (uCustomLaserLambda > 50.0) ? uCustomLaserLambda : 532.0;
+  return customLam + (rand(rng) - 0.5) * 3.0;
 }
 
 struct PhotonHit {
@@ -319,7 +331,7 @@ void main() {
 
   float laserLambda = sampleLaserWavelength(rng);
   vec3 laserRGB = max(wavelengthToLinearRGB(laserLambda), vec3(0.0));
-  float laserGain = (uLaserMode == 3) ? 1.8 : 1.0;
+  float laserGain = (uLaserMode >= 3 && uLaserMode <= 5) ? 1.65 : 1.0;
 
   vec3 lDir = getLaserDirSafe();
   vec3 lRight = getLaserRightSafe();
