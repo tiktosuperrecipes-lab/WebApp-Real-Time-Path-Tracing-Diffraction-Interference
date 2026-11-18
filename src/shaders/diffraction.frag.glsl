@@ -14,7 +14,6 @@ uniform int uSampleCount;
 uniform int uSamplesPerFrame;
 uniform int uLaserMode;
 uniform int uSlit1Blocked;
-uniform int uLaserSimMode;
 
 uniform vec3 uCamPos;
 uniform mat4 uCamMatrix;
@@ -43,20 +42,10 @@ vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uin
   primaryDepth = -1.0;
 
   vec3 laserSpectrumRGB = max(wavelengthToLinearRGB(laserLambda), vec3(0.0));
-  float laserGain = (uLaserMode == 3) ? 1.8 : 0.95;
 
   for (int bounce = 0; bounce < MAX_BOUNCES; bounce++) {
     HitInfo hit;
-    bool hasHit = traceScene(ro, rd, T_MAX, hit);
-    float segMaxT = hasHit ? hit.t : 8.0;
-
-    if (uLaserSimMode == 0 && bounce == 0) {
-      float preBeam = evalPreSlitLaserBeam(ro, rd, segMaxT);
-      float postFan = evalPostSlitVolumetricFan(ro, rd, segMaxT, laserLambda, rng);
-      radianceRGB += laserSpectrumRGB * ((preBeam + postFan * 1.4) * laserGain);
-    }
-
-    if (!hasHit) {
+    if (!traceScene(ro, rd, T_MAX, hit)) {
       radianceRGB += throughputRGB * vec3(0.010);
       break;
     }
@@ -82,14 +71,8 @@ vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uin
       radianceRGB += throughputRGB * sampleOverheadLightRGB(hit, rng);
 
       bool skipDirectScreenLaser = lastBounceDiffractive && (hit.surfaceId == SURF_SCREEN);
-      if (!skipDirectScreenLaser) {
-        if (uLaserSimMode == 0) {
-          float laserHuygens = sampleDoubleSlitHuygens(hit.pos, hit.normal, true, laserLambda, 6, rng);
-          float reflLaser = evalSpectrumFromRGB(hit.albedo, laserLambda);
-          radianceRGB += throughputRGB * laserSpectrumRGB * (reflLaser * INV_PI * laserHuygens * 5.2 * laserGain);
-        } else if (hit.surfaceId != SURF_NONE) {
-          radianceRGB += throughputRGB * sampleWorldPhotonMap(hit);
-        }
+      if (!skipDirectScreenLaser && hit.surfaceId != SURF_NONE) {
+        radianceRGB += throughputRGB * sampleWorldPhotonMap(hit);
       }
 
       ro = hit.pos + hit.normal * EPS;

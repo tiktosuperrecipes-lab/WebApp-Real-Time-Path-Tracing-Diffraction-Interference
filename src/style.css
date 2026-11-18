@@ -239,12 +239,6 @@ body.menu-open #side-menu {
 }
 
 /* Estados específicos */
-.ctrl-btn[data-sim="1"].active {
-  border-color: rgba(244, 114, 182, 0.7);
-  background: rgba(236, 72, 153, 0.24);
-  color: #fbcfe8;
-}
-
 .laser-btn[data-laser="0"].active {
   border-color: rgba(74, 222, 128, 0.7);
   background: rgba(34, 197, 94, 0.24);

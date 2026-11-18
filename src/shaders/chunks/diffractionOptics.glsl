@@ -25,71 +25,6 @@ vec3 sampleOverheadLightRGB(HitInfo hit, inout uint rng) {
   return (hit.albedo * INV_PI) * LIGHT_EMISSION * geom * LIGHT_AREA;
 }
 
-float sampleDoubleSlitHuygens(
-  vec3 targetPos,
-  vec3 surfaceNormal,
-  bool isSurface,
-  float laserLambda,
-  int nSubPerSlit,
-  inout uint rng
-) {
-  vec3 toTargetFromCenter = targetPos - SLIT_CENTER;
-  float dRef = length(toTargetFromCenter);
-  if (dRef < 0.05) return 0.0;
-
-  vec3 dirCenter = toTargetFromCenter / dRef;
-  float cosAxis = dot(dirCenter, SLIT_AXIS);
-  if (cosAxis <= 0.05) return 0.0;
-
-  float cosSurf = 1.0;
-  if (isSurface) {
-    cosSurf = dot(surfaceNormal, -dirCenter);
-    if (cosSurf <= 0.0) return 0.0;
-  }
-
-  float dy = targetPos.y - SLIT_CENTER.y;
-  if (abs(dy) > 0.36) return 0.0;
-  float verticalBeam = exp(-0.5 * (dy * dy) / (0.11 * 0.11));
-
-  float vSlit = clamp(dy * 0.55 + (rand(rng) - 0.5) * 0.06, -SLIT_HALF_H, SLIT_HALF_H);
-  float lambdaSim = (laserLambda / 550.0) * 0.0054;
-  float k = (2.0 * PI) / lambdaSim;
-
-  vec2 phasor = vec2(0.0);
-  float invN = 1.0 / float(nSubPerSlit);
-  vec3 shadowStart = isSurface ? (targetPos + surfaceNormal * EPS) : targetPos;
-
-  if (uSlit1Blocked == 0) {
-    for (int i = 0; i < nSubPerSlit; i++) {
-      float u = mix(SLIT1_MIN_U, SLIT1_MAX_U, (float(i) + rand(rng)) * invN);
-      vec3 slitPt = SLIT_CENTER + SLIT_TANGENT * u + vec3(0.0, vSlit, 0.0);
-      vec3 toSlit = slitPt - shadowStart;
-      float dOut = length(toSlit);
-      if (!traceShadow(shadowStart, toSlit / dOut, dOut - 0.015)) {
-        float dIn = length(slitPt - LASER_TIP) - 0.56;
-        float phase = k * ((dIn + dOut) - dRef);
-        float amp = ((1.0 + cosAxis) * 0.5) * invN / max(dOut, 0.25);
-        phasor += vec2(cos(phase), sin(phase)) * amp;
-      }
-    }
-  }
-
-  for (int i = 0; i < nSubPerSlit; i++) {
-    float u = mix(SLIT2_MIN_U, SLIT2_MAX_U, (float(i) + rand(rng)) * invN);
-    vec3 slitPt = SLIT_CENTER + SLIT_TANGENT * u + vec3(0.0, vSlit, 0.0);
-    vec3 toSlit = slitPt - shadowStart;
-    float dOut = length(toSlit);
-    if (!traceShadow(shadowStart, toSlit / dOut, dOut - 0.015)) {
-      float dIn = length(slitPt - LASER_TIP) - 0.56;
-      float phase = k * ((dIn + dOut) - dRef);
-      float amp = ((1.0 + cosAxis) * 0.5) * invN / max(dOut, 0.25);
-      phasor += vec2(cos(phase), sin(phase)) * amp;
-    }
-  }
-
-  return dot(phasor, phasor) * verticalBeam * cosSurf;
-}
-
 vec3 evalGratingFromLight(
   vec3 hitPos,
   vec3 V,
@@ -176,18 +111,10 @@ vec3 sampleGratingDiffractionRGB(HitInfo hit, vec3 V, float laserLambda, inout u
     -1.318
   );
   float scrArea = 1.70 * 0.60;
-  float laserGain = (uLaserMode == 3) ? 1.8 : 0.95;
-  vec3 scrLaserRad = vec3(0.0);
-
-  if (uLaserSimMode == 0) {
-    float h = sampleDoubleSlitHuygens(scrPos, vec3(0.0, 0.0, 1.0), true, laserLambda, 4, rng);
-    scrLaserRad = max(wavelengthToLinearRGB(laserLambda), vec3(0.0)) * (0.90 * INV_PI * h * 5.2 * laserGain);
-  } else {
-    scrLaserRad = sampleScreenPhotonAt(scrPos);
-  }
+  vec3 scrLaserRad = sampleScreenPhotonAt(scrPos);
 
   if (dot(scrLaserRad, vec3(1.0)) > 1e-5) {
-    bool mono = (uLaserSimMode == 0) || (uLaserMode != 3);
+    bool mono = (uLaserMode != 3);
     rainbowRGB += evalGratingFromLight(
       hit.pos, V, R, T,
       scrPos, vec3(0.0, 0.0, 1.0), scrArea, scrLaserRad,
@@ -198,47 +125,4 @@ vec3 sampleGratingDiffractionRGB(HitInfo hit, vec3 V, float laserLambda, inout u
   HitInfo sheenHit = hit;
   sheenHit.albedo = vec3(0.04);
   return rainbowRGB + sampleOverheadLightRGB(sheenHit, rng);
-}
-
-float evalPreSlitLaserBeam(vec3 ro, vec3 rd, float maxT) {
-  vec3 w = ro - LASER_TIP;
-  float segLen = length(SLIT_CENTER - LASER_TIP);
-  float b = dot(rd, SLIT_AXIS);
-  float d = dot(rd, w);
-  float e = dot(SLIT_AXIS, w);
-  float denom = 1.0 - b * b;
-
-  float tc = clamp((denom < 1e-5) ? e : (e - b * d) / denom, 0.0, segLen);
-  float sc = max(0.0, -d + tc * b);
-  if (sc >= maxT) return 0.0;
-
-  float dist = length((ro + rd * sc) - (LASER_TIP + SLIT_AXIS * tc));
-  float core = exp(-(dist * dist) / (0.011 * 0.011));
-  float halo = 0.20 * exp(-(dist * dist) / (0.032 * 0.032));
-  return (core + halo) * 0.95 / max(sqrt(max(denom, 0.0)), 0.25);
-}
-
-float evalPostSlitVolumetricFan(vec3 ro, vec3 rd, float maxT, float laserLambda, inout uint rng) {
-  if (abs(rd.y) < 1e-5 && abs(ro.y - SLIT_CENTER.y) > 0.24) return 0.0;
-
-  float t0 = 0.0;
-  float t1 = min(maxT, 6.0);
-  if (abs(rd.y) >= 1e-5) {
-    float ty0 = (SLIT_CENTER.y - 0.22 - ro.y) / rd.y;
-    float ty1 = (SLIT_CENTER.y + 0.22 - ro.y) / rd.y;
-    t0 = max(t0, min(ty0, ty1));
-    t1 = min(t1, max(ty0, ty1));
-  }
-
-  float slabLen = t1 - t0;
-  if (slabLen <= 0.005) return 0.0;
-
-  const int VOL_STEPS = 3;
-  float stepLen = slabLen / float(VOL_STEPS);
-  float sumVol = 0.0;
-  for (int i = 0; i < VOL_STEPS; i++) {
-    vec3 pVol = ro + rd * (t0 + (float(i) + rand(rng)) * stepLen);
-    sumVol += sampleDoubleSlitHuygens(pVol, vec3(0.0), false, laserLambda, 4, rng);
-  }
-  return (sumVol / float(VOL_STEPS)) * slabLen * 0.14;
 }

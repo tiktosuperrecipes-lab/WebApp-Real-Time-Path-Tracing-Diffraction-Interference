@@ -20,10 +20,7 @@ export function createGLContext(canvas, statsEl) {
     console.warn('EXT_color_buffer_float indisponível; usando HalfFloatType.');
   }
 
-  const hasFloatBlend = renderer.extensions.has('EXT_float_blend');
-  if (!hasFloatBlend) {
-    console.warn('EXT_float_blend indisponível; modo Fótons Reais desativado.');
-  }
+  renderer.extensions.has('EXT_float_blend');
 
   const timerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const accumType = hasFloatBuffer ? THREE.FloatType : THREE.HalfFloatType;
@@ -37,7 +34,6 @@ export function createGLContext(canvas, statsEl) {
     renderer,
     gl,
     hasFloatBuffer,
-    hasFloatBlend,
     timerExt,
     accumType,
     bufferLabel

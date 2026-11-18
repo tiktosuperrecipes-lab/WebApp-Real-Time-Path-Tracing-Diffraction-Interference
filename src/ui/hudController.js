@@ -2,11 +2,9 @@ import { MAX_FPS_SLIDER } from '../core/framePacer.js';
 
 export function createHudController({
   isCoarsePointer,
-  hasFloatBlend,
   initialFpsLimit,
   initialCleanMotion,
   onSelectScene,
-  onSelectSimMode,
   onSelectLaserMode,
   onToggleSlit,
   onToggleDenoise,
@@ -19,8 +17,6 @@ export function createHudController({
   const menuCloseBtn = document.getElementById('menu-close-btn');
   const sceneButtons = Array.from(document.querySelectorAll('[data-scene]'));
   const laserSection = document.getElementById('laser-section');
-  const simRow = document.getElementById('sim-row');
-  const simButtons = Array.from(document.querySelectorAll('[data-sim]'));
   const laserButtons = Array.from(document.querySelectorAll('[data-laser]'));
   const toggleSlitBtn = document.getElementById('toggle-slit');
   const toggleDenoiseBtn = document.getElementById('toggle-denoise');
@@ -78,11 +74,9 @@ export function createHudController({
   function syncSceneUI(activeSceneId) {
     sceneButtons.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.scene) === activeSceneId));
     laserSection.hidden = activeSceneId !== 1;
-    simRow.hidden = !hasFloatBlend;
   }
 
-  function syncLaserUI({ laserSimMode, laserMode, slit1Blocked }) {
-    simButtons.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.sim) === laserSimMode));
+  function syncLaserUI({ laserMode, slit1Blocked }) {
     laserButtons.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.laser) === laserMode));
     toggleSlitBtn.textContent = `Fenda 1: ${slit1Blocked ? 'Tampada' : 'Aberta'}`;
     toggleSlitBtn.classList.toggle('blocked', slit1Blocked === 1);
@@ -107,7 +101,6 @@ export function createHudController({
   });
 
   sceneButtons.forEach((btn) => btn.addEventListener('click', () => onSelectScene(Number(btn.dataset.scene))));
-  simButtons.forEach((btn) => btn.addEventListener('click', () => onSelectSimMode(Number(btn.dataset.sim))));
   laserButtons.forEach((btn) => btn.addEventListener('click', () => onSelectLaserMode(Number(btn.dataset.laser))));
   toggleSlitBtn.addEventListener('click', onToggleSlit);
   toggleDenoiseBtn.addEventListener('click', onToggleDenoise);
@@ -119,7 +112,6 @@ export function createHudController({
     if (k === 'd') onToggleDenoise();
     else if (k === 'q') onToggleCleanMotion();
     else if (k === 's') onSelectScene(null);
-    else if (k === 'f') onSelectSimMode(null);
     else if (k === 'l') onSelectLaserMode(null);
     else if (k === 'b') onToggleSlit();
     else if (k === 'm') setMenuOpen(!menuOpen);
@@ -133,14 +125,14 @@ export function createHudController({
     samplesPerFrame,
     fps,
     gpuMs,
-    useForwardPhotons,
+    isDiffraction,
     worldPhotonFrameCount,
     traceSize,
     renderScale,
     bufferLabel
   }) {
     const gpuInfo = gpuMs !== null ? ` · ${gpuMs.toFixed(1)}ms` : '';
-    const photonInfo = useForwardPhotons ? ` · Atlas ${worldPhotonFrameCount}f` : '';
+    const photonInfo = isDiffraction ? ` · Atlas ${worldPhotonFrameCount}f` : '';
     statsEl.textContent =
       `${sampleCount} spp (+${samplesPerFrame}) · ${fps} FPS${gpuInfo}${photonInfo} · ` +
       `${traceSize.x}x${traceSize.y} (${renderScale}x) · ${bufferLabel}`;

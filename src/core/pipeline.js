@@ -116,12 +116,11 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     displayMaterial.uniforms.uExposure.value = preset.exposure;
   }
 
-  function syncLaserUniforms({ laserMode, slit1Blocked, laserSimMode }) {
+  function syncLaserUniforms({ laserMode, slit1Blocked }) {
     const diffMat = sceneManager.materials[1];
     if (diffMat) {
       diffMat.uniforms.uLaserMode.value = laserMode;
       diffMat.uniforms.uSlit1Blocked.value = slit1Blocked;
-      diffMat.uniforms.uLaserSimMode.value = laserSimMode;
     }
     photonMaterial.uniforms.uLaserMode.value = laserMode;
     photonMaterial.uniforms.uSlit1Blocked.value = slit1Blocked;
@@ -135,7 +134,6 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
 
   function renderFrame({
     activeSceneId,
-    useForwardPhotons,
     denoiseEnabled,
     sampleCount,
     samplesPerFrame,
@@ -143,8 +141,9 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     worldPhotonFrameCount
   }) {
     frameSeed = (frameSeed + 1) | 0;
+    const isDiffraction = activeSceneId === 1;
 
-    if (useForwardPhotons) {
+    if (isDiffraction) {
       photonMaterial.uniforms.uPassType.value = 0;
       photonMaterial.uniforms.uFrameSeed.value = frameSeed;
       photonMaterial.uniforms.uGBufferTex.value = targets.blackTex;
@@ -169,16 +168,14 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     activeMat.uniforms.uSamplesPerFrame.value = samplesPerFrame;
     activeMat.uniforms.uCamPos.value.copy(sceneManager.camera.position);
     activeMat.uniforms.uCamMatrix.value.copy(sceneManager.camera.matrixWorld);
-    if (activeSceneId === 1) {
-      activeMat.uniforms.uWorldPhotonTex.value = useForwardPhotons
-        ? targets.readWorldPhoton.texture
-        : targets.blackTex;
+    if (isDiffraction) {
+      activeMat.uniforms.uWorldPhotonTex.value = targets.readWorldPhoton.texture;
     }
 
     renderer.setRenderTarget(targets.writeAccum);
     renderer.render(ptScene, quadCamera);
 
-    if (useForwardPhotons) {
+    if (isDiffraction) {
       photonMaterial.uniforms.uPassType.value = 1;
       photonMaterial.uniforms.uViewProj.value.copy(sceneManager.viewProjMatrix);
       photonMaterial.uniforms.uCamPos.value.copy(sceneManager.camera.position);
@@ -214,7 +211,7 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
         denoiseMaterial.uniforms.uPassIndex.value = i;
         denoiseMaterial.uniforms.uStepSize.value = ATROUS_STEPS[i];
 
-        const addAir = i === 0 && useForwardPhotons;
+        const addAir = i === 0 && isDiffraction;
         denoiseMaterial.uniforms.uExtraTex.value = addAir ? targets.readAirPhoton.texture : targets.blackTex;
         denoiseMaterial.uniforms.uHasExtraTex.value = addAir ? 1 : 0;
 
@@ -226,7 +223,7 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
       finalHdrTexture = targets.denoiseA.texture;
     }
 
-    const addAirDisplay = !denoiseEnabled && useForwardPhotons;
+    const addAirDisplay = !denoiseEnabled && isDiffraction;
     displayMaterial.uniforms.uInputTexture.value = finalHdrTexture;
     displayMaterial.uniforms.uExtraTex.value = addAirDisplay ? targets.readAirPhoton.texture : targets.blackTex;
     displayMaterial.uniforms.uHasExtraTex.value = addAirDisplay ? 1 : 0;

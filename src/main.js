@@ -12,7 +12,7 @@ const canvas = document.getElementById('gl-canvas');
 const statsEl = document.getElementById('stats');
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
-const { renderer, gl, hasFloatBlend, timerExt, accumType, bufferLabel } = createGLContext(canvas, statsEl);
+const { renderer, gl, timerExt, accumType, bufferLabel } = createGLContext(canvas, statsEl);
 
 const fullSize = new THREE.Vector2();
 renderer.getDrawingBufferSize(fullSize);
@@ -27,7 +27,6 @@ const targets = createRenderTargets(traceSize.x, traceSize.y, accumType, 1024);
 const pacer = createFramePacer({ gl, timerExt, initialFps: 60 });
 
 const simState = {
-  laserSimMode: 0,
   laserMode: 0,
   slit1Blocked: 0,
   denoiseEnabled: true,
@@ -92,20 +91,9 @@ function switchToScene(nextId) {
 
 const hud = createHudController({
   isCoarsePointer,
-  hasFloatBlend,
   initialFpsLimit: 60,
   initialCleanMotion: simState.cleanMotionMode,
   onSelectScene: switchToScene,
-  onSelectSimMode(nextSim) {
-    if (sceneManager.activeSceneId !== 1 || !hasFloatBlend) return;
-    const target = nextSim === null ? (simState.laserSimMode === 0 ? 1 : 0) : nextSim;
-    if (target === simState.laserSimMode) return;
-    simState.laserSimMode = target;
-    pipeline.syncLaserUniforms(simState);
-    hud.syncLaserUI(simState);
-    resetWorldPhotons();
-    resetCameraAccumulation();
-  },
   onSelectLaserMode(nextLaser) {
     if (sceneManager.activeSceneId !== 1) return;
     const target = nextLaser === null ? (simState.laserMode + 1) % 4 : nextLaser;
@@ -195,12 +183,11 @@ function animate(now) {
 
   pacer.adjustAutoSpp(dt, simState.isMoving, simState.cleanMotionMode, targetFrameMs);
 
-  const useForwardPhotons = sceneManager.activeSceneId === 1 && simState.laserSimMode === 1 && hasFloatBlend;
+  const isDiffraction = sceneManager.activeSceneId === 1;
   const query = pacer.beginGpuQuery();
 
   pipeline.renderFrame({
     activeSceneId: sceneManager.activeSceneId,
-    useForwardPhotons,
     denoiseEnabled: simState.denoiseEnabled,
     sampleCount: simState.sampleCount,
     samplesPerFrame: pacer.samplesPerFrame,
@@ -211,7 +198,7 @@ function animate(now) {
   pacer.endGpuQuery(query, sceneManager.activeSceneId);
 
   simState.sampleCount += pacer.samplesPerFrame;
-  if (useForwardPhotons) {
+  if (isDiffraction) {
     simState.worldPhotonFrameCount += 1;
     simState.airPhotonFrameCount += 1;
   }
@@ -221,7 +208,7 @@ function animate(now) {
     samplesPerFrame: pacer.samplesPerFrame,
     fps: Math.round(1000 / pacer.smoothedFrameMs),
     gpuMs: pacer.lastGpuMs,
-    useForwardPhotons,
+    isDiffraction,
     worldPhotonFrameCount: simState.worldPhotonFrameCount,
     traceSize,
     renderScale,

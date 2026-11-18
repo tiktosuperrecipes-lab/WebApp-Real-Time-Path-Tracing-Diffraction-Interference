@@ -69,8 +69,7 @@ export function createSceneManager({ domElement, traceSize, blackTex, onCameraCh
         ? {
             uWorldPhotonTex: { value: blackTex },
             uLaserMode: { value: laserState.laserMode },
-            uSlit1Blocked: { value: laserState.slit1Blocked },
-            uLaserSimMode: { value: laserState.laserSimMode }
+            uSlit1Blocked: { value: laserState.slit1Blocked }
           }
         : {};
       materials[sceneId] = buildMaterial(SCENE_PRESETS[sceneId].frag, extra);
