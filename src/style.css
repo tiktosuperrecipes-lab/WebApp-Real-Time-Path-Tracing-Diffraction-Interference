@@ -293,6 +293,50 @@ body.menu-open #side-menu {
   color: #fecaca;
 }
 
+#toggle-clean-move.active {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(14, 165, 233, 0.22);
+  color: #bae6fd;
+}
+
+#toggle-clean-move.off {
+  border-color: rgba(156, 163, 175, 0.45);
+  background: rgba(107, 114, 128, 0.16);
+  color: #d1d5db;
+}
+
+/* ---------------- Slider de FPS ---------------- */
+.slider-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.slider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: #d1d5db;
+}
+
+#fps-limit-value {
+  color: #93c5fd;
+}
+
+#fps-limit-slider {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  accent-color: #60a5fa;
+  cursor: pointer;
+}
+
 .menu-hint {
   font-size: 10px;
   line-height: 1.4;
@@ -300,7 +344,7 @@ body.menu-open #side-menu {
   margin-top: 2px;
 }
 
-/* ---------------- Ajustes compactos para mobile deitado (baixa altura) ---------------- */
+/* ---------------- Ajustes compactos para mobile deitado ---------------- */
 @media (max-height: 500px) {
   #side-menu {
     width: min(275px, 46vw);
