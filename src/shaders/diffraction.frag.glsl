@@ -51,7 +51,7 @@ vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uin
     }
 
     if (bounce == 0) {
-      primaryNormal = hit.normal;
+      primaryNormal = hit.normal * ((hit.matType == MAT_DIFFUSE) ? 1.0 : 0.5);
       primaryDepth = hit.t;
     }
 

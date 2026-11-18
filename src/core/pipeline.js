@@ -7,7 +7,7 @@ import photonAccumFrag from '../shaders/photonAccum.frag.glsl?raw';
 import denoiseFrag from '../shaders/denoise.frag.glsl?raw';
 import displayFrag from '../shaders/display.frag.glsl?raw';
 
-const ATROUS_STEPS = [1, 2, 4];
+const ATROUS_STEPS = [1, 2];
 const PHOTON_COUNT = 131072;
 
 export function createRenderPipeline({ renderer, targets, sceneManager, traceSize }) {
@@ -73,13 +73,11 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     depthWrite: false,
     uniforms: {
       uColorTex: { value: null },
-      uExtraTex: { value: targets.blackTex },
       uGBufferTex: { value: null },
       uTexSize: { value: new THREE.Vector2(traceSize.x, traceSize.y) },
       uPassIndex: { value: 0 },
       uStepSize: { value: 1 },
       uSampleCount: { value: 1 },
-      uHasExtraTex: { value: 0 },
       uNoiseScale: { value: 1.0 }
     }
   });
@@ -204,29 +202,24 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
       denoiseMaterial.uniforms.uSampleCount.value = nextSampleCount;
 
       let srcTex = targets.writeAccum.textures[0];
-      const dstTargets = [targets.denoiseA, targets.denoiseB, targets.denoiseA];
+      const dstTargets = [targets.denoiseA, targets.denoiseB];
 
       for (let i = 0; i < ATROUS_STEPS.length; i++) {
         denoiseMaterial.uniforms.uColorTex.value = srcTex;
         denoiseMaterial.uniforms.uPassIndex.value = i;
         denoiseMaterial.uniforms.uStepSize.value = ATROUS_STEPS[i];
 
-        const addAir = i === 0 && isDiffraction;
-        denoiseMaterial.uniforms.uExtraTex.value = addAir ? targets.readAirPhoton.texture : targets.blackTex;
-        denoiseMaterial.uniforms.uHasExtraTex.value = addAir ? 1 : 0;
-
         renderer.setRenderTarget(dstTargets[i]);
         renderer.render(denoiseScene, quadCamera);
         srcTex = dstTargets[i].texture;
       }
 
-      finalHdrTexture = targets.denoiseA.texture;
+      finalHdrTexture = targets.denoiseB.texture;
     }
 
-    const addAirDisplay = !denoiseEnabled && isDiffraction;
     displayMaterial.uniforms.uInputTexture.value = finalHdrTexture;
-    displayMaterial.uniforms.uExtraTex.value = addAirDisplay ? targets.readAirPhoton.texture : targets.blackTex;
-    displayMaterial.uniforms.uHasExtraTex.value = addAirDisplay ? 1 : 0;
+    displayMaterial.uniforms.uExtraTex.value = isDiffraction ? targets.readAirPhoton.texture : targets.blackTex;
+    displayMaterial.uniforms.uHasExtraTex.value = isDiffraction ? 1 : 0;
 
     renderer.setRenderTarget(null);
     renderer.render(displayScene, quadCamera);

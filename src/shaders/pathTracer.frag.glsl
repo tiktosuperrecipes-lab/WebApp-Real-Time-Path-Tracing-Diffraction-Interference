@@ -170,7 +170,7 @@ vec3 tracePath(vec3 ro, vec3 rd, inout uint rng, out vec3 primaryNormal, out flo
     }
 
     if (bounce == 0) {
-      primaryNormal = hit.normal;
+      primaryNormal = hit.normal * ((hit.matType == MAT_DIFFUSE) ? 1.0 : 0.5);
       primaryDepth = hit.t;
     }
 
