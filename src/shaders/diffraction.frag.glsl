@@ -26,6 +26,7 @@ uniform float uAspect;
 //#include <spectrum>
 //#include <sampling>
 //#include <intersections>
+//#include <lenses>
 //#include <diffractionScene>
 //#include <diffractionOptics>
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assembleShader } from '../shaders/assembleShader.js';
+import { computeLaserBasis } from '../scenes/presets.js';
 import quadVert from '../shaders/quad.vert.glsl?raw';
 import photonVert from '../shaders/photon.vert.glsl?raw';
 import photonFrag from '../shaders/photon.frag.glsl?raw';
@@ -22,6 +23,8 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
   photonGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PHOTON_COUNT * 3), 3));
   photonGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 100);
 
+  const initialBasis = computeLaserBasis(0, 0);
+
   const photonMaterial = new THREE.RawShaderMaterial({
     glslVersion: THREE.GLSL3,
     vertexShader: assembleShader(photonVert),
@@ -38,9 +41,17 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
       uFrameSeed: { value: 1 },
       uLaserMode: { value: 0 },
       uSlit1Blocked: { value: 0 },
+      uSlitPlateEnabled: { value: 1 },
       uPhotonCount: { value: PHOTON_COUNT },
       uPassType: { value: 0 },
-      uGBufferTex: { value: targets.blackTex }
+      uGBufferTex: { value: targets.blackTex },
+      uLaserDir: { value: initialBasis.dir.clone() },
+      uLaserRight: { value: initialBasis.right.clone() },
+      uLaserUp: { value: initialBasis.up.clone() },
+      uLaserBeamRadius: { value: 0.056 },
+      uLensPos: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+      uLensYaw: { value: [0, 0, 0, 0] },
+      uSelectedLens: { value: -1 }
     }
   });
 
@@ -118,14 +129,42 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     displayMaterial.uniforms.uExposure.value = preset.exposure;
   }
 
-  function syncLaserUniforms({ laserMode, slit1Blocked }) {
+  function syncLaserUniforms({
+    laserMode,
+    slit1Blocked,
+    slitPlateEnabled = 1,
+    laserBeamRadius = 0.056,
+    laserYawDeg = 0,
+    laserPitchDeg = 0
+  }) {
+    const basis = computeLaserBasis(laserYawDeg, laserPitchDeg);
     const diffMat = sceneManager.materials[1];
     if (diffMat) {
       diffMat.uniforms.uLaserMode.value = laserMode;
       diffMat.uniforms.uSlit1Blocked.value = slit1Blocked;
+      diffMat.uniforms.uSlitPlateEnabled.value = slitPlateEnabled;
+      diffMat.uniforms.uLaserBeamRadius.value = laserBeamRadius;
+      diffMat.uniforms.uLaserDir.value.copy(basis.dir);
     }
     photonMaterial.uniforms.uLaserMode.value = laserMode;
     photonMaterial.uniforms.uSlit1Blocked.value = slit1Blocked;
+    photonMaterial.uniforms.uSlitPlateEnabled.value = slitPlateEnabled;
+    photonMaterial.uniforms.uLaserBeamRadius.value = laserBeamRadius;
+    photonMaterial.uniforms.uLaserDir.value.copy(basis.dir);
+    photonMaterial.uniforms.uLaserRight.value.copy(basis.right);
+    photonMaterial.uniforms.uLaserUp.value.copy(basis.up);
+  }
+
+  function syncLensUniforms({ positions, yaws, selectedLens }) {
+    const diffMat = sceneManager.materials[1];
+    if (diffMat) {
+      diffMat.uniforms.uLensPos.value = positions;
+      diffMat.uniforms.uLensYaw.value = yaws;
+      diffMat.uniforms.uSelectedLens.value = selectedLens;
+    }
+    photonMaterial.uniforms.uLensPos.value = positions;
+    photonMaterial.uniforms.uLensYaw.value = yaws;
+    photonMaterial.uniforms.uSelectedLens.value = selectedLens;
   }
 
   function updateResolution(newTraceSize, tanHalfFov) {
@@ -238,6 +277,7 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
   return {
     setActiveScene,
     syncLaserUniforms,
+    syncLensUniforms,
     updateResolution,
     renderFrame
   };

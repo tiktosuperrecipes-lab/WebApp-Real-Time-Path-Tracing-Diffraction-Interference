@@ -5,6 +5,21 @@ import quadVert from '../shaders/quad.vert.glsl?raw';
 import cornellFrag from '../shaders/pathTracer.frag.glsl?raw';
 import diffractionFrag from '../shaders/diffraction.frag.glsl?raw';
 
+export const LASER_PIVOT = new THREE.Vector3(-1.37515, -0.36, 0.80119);
+const BASE_LASER_YAW = Math.atan2(0.34394, -0.93899);
+
+export function computeLaserBasis(yawDeg, pitchDeg) {
+  const yaw = BASE_LASER_YAW + THREE.MathUtils.degToRad(yawDeg);
+  const pitch = THREE.MathUtils.degToRad(pitchDeg);
+  const cosP = Math.cos(pitch);
+  const sinP = Math.sin(pitch);
+
+  const dir = new THREE.Vector3(Math.sin(yaw) * cosP, sinP, Math.cos(yaw) * cosP).normalize();
+  const right = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw)).normalize();
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+  return { dir, right, up };
+}
+
 export const SCENE_PRESETS = [
   {
     name: 'Cornell Box',
@@ -63,13 +78,20 @@ export function createSceneManager({ domElement, traceSize, blackTex, onCameraCh
     if (!suppressMove) onCameraChange();
   });
 
-  function getOrCreateMaterial(sceneId, laserState) {
+  function getOrCreateMaterial(sceneId, laserState, lensState) {
     if (!materials[sceneId]) {
+      const basis = computeLaserBasis(laserState.laserYawDeg ?? 0, laserState.laserPitchDeg ?? 0);
       const extra = sceneId === 1
         ? {
             uWorldPhotonTex: { value: blackTex },
             uLaserMode: { value: laserState.laserMode },
-            uSlit1Blocked: { value: laserState.slit1Blocked }
+            uSlit1Blocked: { value: laserState.slit1Blocked },
+            uSlitPlateEnabled: { value: laserState.slitPlateEnabled ?? 1 },
+            uLaserDir: { value: basis.dir.clone() },
+            uLaserBeamRadius: { value: laserState.laserBeamRadius ?? 0.056 },
+            uLensPos: { value: lensState ? lensState.positions : [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+            uLensYaw: { value: lensState ? lensState.yaws : [0, 0, 0, 0] },
+            uSelectedLens: { value: lensState ? lensState.selectedLens : -1 }
           }
         : {};
       materials[sceneId] = buildMaterial(SCENE_PRESETS[sceneId].frag, extra);
@@ -86,10 +108,10 @@ export function createSceneManager({ domElement, traceSize, blackTex, onCameraCh
     suppressMove = false;
   }
 
-  function switchScene(nextId, laserState, currentTraceSize) {
+  function switchScene(nextId, laserState, currentTraceSize, lensState = null) {
     activeSceneId = nextId;
     const preset = SCENE_PRESETS[activeSceneId];
-    const mat = getOrCreateMaterial(activeSceneId, laserState);
+    const mat = getOrCreateMaterial(activeSceneId, laserState, lensState);
 
     mat.uniforms.uResolution.value.copy(currentTraceSize);
     mat.uniforms.uAspect.value = camera.aspect;

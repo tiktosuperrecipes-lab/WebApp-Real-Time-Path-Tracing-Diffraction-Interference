@@ -3,6 +3,7 @@ import rng from './chunks/rng.glsl?raw';
 import spectrum from './chunks/spectrum.glsl?raw';
 import sampling from './chunks/sampling.glsl?raw';
 import intersections from './chunks/intersections.glsl?raw';
+import lenses from './chunks/lenses.glsl?raw';
 import diffractionScene from './chunks/diffractionScene.glsl?raw';
 import diffractionOptics from './chunks/diffractionOptics.glsl?raw';
 
@@ -12,6 +13,7 @@ const CHUNKS = {
   spectrum,
   sampling,
   intersections,
+  lenses,
   diffractionScene,
   diffractionOptics
 };

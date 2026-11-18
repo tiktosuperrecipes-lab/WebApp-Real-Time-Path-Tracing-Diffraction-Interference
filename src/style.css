@@ -93,7 +93,7 @@ body.menu-open #menu-open-btn {
   top: 0;
   left: 0;
   bottom: 0;
-  width: min(292px, 44vw);
+  width: min(296px, 44vw);
   min-width: 248px;
   height: 100dvh;
   z-index: 30;
@@ -263,6 +263,18 @@ body.menu-open #side-menu {
   color: #ffffff;
 }
 
+#toggle-plate.active {
+  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(59, 130, 246, 0.25);
+  color: #dbeafe;
+}
+
+#toggle-plate.off {
+  border-color: rgba(156, 163, 175, 0.45);
+  background: rgba(107, 114, 128, 0.16);
+  color: #d1d5db;
+}
+
 #toggle-slit {
   border-color: rgba(251, 191, 36, 0.5);
   background: rgba(245, 158, 11, 0.18);
@@ -273,6 +285,19 @@ body.menu-open #side-menu {
   border-color: rgba(248, 113, 113, 0.7);
   background: rgba(239, 68, 68, 0.26);
   color: #fecaca;
+}
+
+.lens-btn.active {
+  border-color: rgba(56, 189, 248, 0.75);
+  background: rgba(14, 165, 233, 0.25);
+  color: #e0f2fe;
+}
+
+.lens-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7dd3fc;
+  padding: 2px 2px 0;
 }
 
 #toggle-denoise.active {
@@ -299,7 +324,7 @@ body.menu-open #side-menu {
   color: #d1d5db;
 }
 
-/* ---------------- Slider de FPS ---------------- */
+/* ---------------- Sliders ---------------- */
 .slider-block {
   display: flex;
   flex-direction: column;
@@ -319,11 +344,11 @@ body.menu-open #side-menu {
   color: #d1d5db;
 }
 
-#fps-limit-value {
+.slider-val {
   color: #93c5fd;
 }
 
-#fps-limit-slider {
+.slider-block input[type='range'] {
   width: 100%;
   height: 18px;
   margin: 0;

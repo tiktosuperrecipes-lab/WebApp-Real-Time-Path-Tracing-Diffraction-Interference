@@ -22,10 +22,7 @@ const float LIGHT_AREA = 0.44 * 0.44;
 const vec3 SLIT_CENTER = vec3(-1.10, -0.36, 0.05);
 const vec3 SLIT_AXIS = vec3(0.34394, 0.0, -0.93899);
 const vec3 SLIT_TANGENT = vec3(0.93899, 0.0, 0.34394);
-
-const vec3 LASER_BACK = SLIT_CENTER - SLIT_AXIS * 1.05;
-const vec3 LASER_TIP  = SLIT_CENTER - SLIT_AXIS * 0.56;
-const vec3 LASER_MID  = SLIT_CENTER - SLIT_AXIS * 0.80;
+const vec3 LASER_PIVOT = SLIT_CENTER - SLIT_AXIS * 0.80;
 const float LASER_RADIUS = 0.062;
 
 const float SLIT1_MIN_U = -0.049;
@@ -47,6 +44,22 @@ const float GLASS_R = 0.31;
 const vec3 POST_POS = vec3(-0.78, -0.68, -0.76);
 const float POST_R = 0.11;
 
+uniform vec3 uLaserDir;
+uniform float uLaserBeamRadius;
+uniform int uSlitPlateEnabled;
+
+vec3 getLaserDirSafe() {
+  return (dot(uLaserDir, uLaserDir) > 0.1) ? normalize(uLaserDir) : SLIT_AXIS;
+}
+
+float getLaserBeamRadiusSafe() {
+  return (uLaserBeamRadius > 0.001) ? uLaserBeamRadius : 0.056;
+}
+
+bool isSlitPlateActive() {
+  return (uLaserBeamRadius <= 0.001) || (uSlitPlateEnabled == 1);
+}
+
 struct HitInfo {
   float t;
   vec3 pos;
@@ -60,6 +73,7 @@ struct HitInfo {
 };
 
 bool intersectSlitPlate(vec3 ro, vec3 rd, float tMax, out float tHit, out vec3 outwardN, out bool isShutter) {
+  if (!isSlitPlateActive()) return false;
   float denom = dot(rd, SLIT_AXIS);
   if (abs(denom) < 1e-6) return false;
   float t = dot(SLIT_CENTER - ro, SLIT_AXIS) / denom;
@@ -100,6 +114,9 @@ bool intersectDisc(vec3 ro, vec3 rd, float tMax, out float tHit, out float radia
 bool traceShadow(vec3 ro, vec3 rd, float maxDist) {
   if (intersectSphereAny(ro, rd, GLASS_POS, GLASS_R, maxDist)) return true;
   if (intersectSphereAny(ro, rd, POST_POS, POST_R, maxDist)) return true;
+  for (int i = 0; i < LENS_COUNT; i++) {
+    if (intersectSphereAny(ro, rd, getLensPosSafe(i), LENS_R, maxDist)) return true;
+  }
   return false;
 }
 
@@ -132,6 +149,11 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   bool anyHit = false;
   float t;
   vec3 n;
+
+  vec3 lDir = getLaserDirSafe();
+  vec3 laserBack = LASER_PIVOT - lDir * 0.25;
+  vec3 laserTip = LASER_PIVOT + lDir * 0.24;
+  float beamR = getLaserBeamRadiusSafe();
 
   if (intersectQuadY(ro, rd, 1.399, -1.0, LIGHT_MIN.xz, LIGHT_MAX.xz, hit.t, t)) {
     anyHit = true;
@@ -169,19 +191,20 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   }
 
   bool isFrontCap;
-  if (intersectCylinder(ro, rd, LASER_BACK, LASER_TIP, LASER_RADIUS, hit.t, t, n, isFrontCap)) {
+  if (intersectCylinder(ro, rd, laserBack, laserTip, LASER_RADIUS, hit.t, t, n, isFrontCap)) {
     anyHit = true;
     vec3 p = ro + rd * t;
-    if (isFrontCap && length(p - LASER_TIP) < 0.022) {
+    float dTip = length(p - laserTip);
+    if (isFrontCap && dTip < max(beamR * 0.55, 0.008)) {
       setHitSurface(hit, t, ro, rd, n, vec3(0.0), 18.0, 0.0, MAT_LASER_LENS, SURF_NONE);
-    } else if (isFrontCap && length(p - LASER_TIP) < 0.042) {
+    } else if (isFrontCap && dTip < 0.044) {
       setHitSurface(hit, t, ro, rd, n, vec3(0.85, 0.65, 0.25), 0.0, 0.18, MAT_METAL, SURF_NONE);
     } else {
       setHitSurface(hit, t, ro, rd, n, vec3(0.16, 0.17, 0.20), 0.0, 0.28, MAT_METAL, SURF_NONE);
     }
   }
 
-  if (intersectCylinder(ro, rd, vec3(LASER_MID.x, -0.80, LASER_MID.z), LASER_MID, 0.024, hit.t, t, n, isFrontCap)) {
+  if (intersectCylinder(ro, rd, vec3(LASER_PIVOT.x, -0.80, LASER_PIVOT.z), LASER_PIVOT, 0.024, hit.t, t, n, isFrontCap)) {
     anyHit = true;
     setHitSurface(hit, t, ro, rd, n, vec3(0.25, 0.26, 0.30), 0.0, 0.30, MAT_METAL, SURF_NONE);
   }
@@ -216,6 +239,17 @@ bool traceScene(vec3 ro, vec3 rd, float maxDist, out HitInfo hit) {
   if (intersectSphere(ro, rd, POST_POS, POST_R, hit.t, t, n)) {
     anyHit = true;
     setHitSurface(hit, t, ro, rd, n, vec3(0.85, 0.86, 0.88), 0.0, 0.15, MAT_METAL, SURF_NONE);
+  }
+
+  int lensKind, lensIdx;
+  if (intersectAllLenses(ro, rd, hit.t, true, t, n, lensKind, lensIdx)) {
+    anyHit = true;
+    if (lensKind == 1) {
+      setHitSurface(hit, t, ro, rd, n, vec3(0.98), 0.0, 0.0, MAT_GLASS, SURF_NONE);
+    } else {
+      vec3 rimCol = (lensIdx == uSelectedLens) ? vec3(0.45, 0.72, 0.98) : vec3(0.18, 0.20, 0.24);
+      setHitSurface(hit, t, ro, rd, n, rimCol, 0.0, 0.22, MAT_METAL, SURF_NONE);
+    }
   }
 
   return anyHit;
