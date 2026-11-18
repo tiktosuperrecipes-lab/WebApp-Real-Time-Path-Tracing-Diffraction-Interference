@@ -6,6 +6,7 @@ in vec2 vUv;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outGBuffer;
+layout(location = 2) out vec4 outAlbedo;
 
 uniform sampler2D uAccumTexture;
 uniform vec2 uResolution;
@@ -154,13 +155,23 @@ vec3 sampleDirectLight(vec3 hitPos, vec3 hitNormal, vec3 albedo, inout uint rng)
   return (albedo * INV_PI) * LIGHT_EMISSION * geom * LIGHT_AREA;
 }
 
-vec3 tracePath(vec3 ro, vec3 rd, inout uint rng, out vec3 primaryNormal, out float primaryDepth) {
+vec3 tracePath(
+  vec3 ro,
+  vec3 rd,
+  inout uint rng,
+  out vec3 primaryNormal,
+  out float primaryDepth,
+  out vec3 primaryAlbedo,
+  out float primaryIsDiffuse
+) {
   vec3 radiance = vec3(0.0);
   vec3 throughput = vec3(1.0);
   bool lastBounceSpecular = true;
 
   primaryNormal = vec3(0.0);
   primaryDepth = -1.0;
+  primaryAlbedo = vec3(1.0);
+  primaryIsDiffuse = 0.0;
 
   for (int bounce = 0; bounce < MAX_BOUNCES; bounce++) {
     HitInfo hit;
@@ -170,8 +181,10 @@ vec3 tracePath(vec3 ro, vec3 rd, inout uint rng, out vec3 primaryNormal, out flo
     }
 
     if (bounce == 0) {
-      primaryNormal = hit.normal * ((hit.matType == MAT_DIFFUSE) ? 1.0 : 0.5);
+      primaryNormal = hit.normal;
       primaryDepth = hit.t;
+      primaryIsDiffuse = (hit.matType == MAT_DIFFUSE) ? 1.0 : 0.0;
+      primaryAlbedo = (hit.matType == MAT_DIFFUSE) ? hit.albedo : vec3(1.0);
     }
 
     if (hit.matType == MAT_LIGHT) {
@@ -249,6 +262,8 @@ void main() {
   float batchLum2Sum = 0.0;
   vec3 primaryNormal = vec3(0.0);
   float primaryDepth = -1.0;
+  vec3 primaryAlbedo = vec3(1.0);
+  float primaryIsDiffuse = 0.0;
   mat3 camRot = mat3(uCamMatrix);
 
   for (int s = 0; s < uSamplesPerFrame; s++) {
@@ -263,7 +278,9 @@ void main() {
 
     vec3 n0;
     float d0;
-    vec3 c = tracePath(uCamPos, rayDir, rng, n0, d0);
+    vec3 a0;
+    float isDiff0;
+    vec3 c = tracePath(uCamPos, rayDir, rng, n0, d0, a0, isDiff0);
     if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
 
     batchColorSum += c;
@@ -273,6 +290,8 @@ void main() {
     if (s == 0) {
       primaryNormal = n0;
       primaryDepth = d0;
+      primaryAlbedo = a0;
+      primaryIsDiffuse = isDiff0;
     }
   }
 
@@ -290,4 +309,5 @@ void main() {
   }
 
   outGBuffer = vec4(primaryNormal, primaryDepth);
+  outAlbedo = vec4(primaryAlbedo, primaryIsDiffuse);
 }

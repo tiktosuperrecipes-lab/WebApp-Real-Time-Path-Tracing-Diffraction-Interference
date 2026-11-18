@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 function createAccumMRT(width, height, type) {
   return new THREE.WebGLRenderTarget(width, height, {
-    count: 2,
+    count: 3,
     type,
     format: THREE.RGBAFormat,
     minFilter: THREE.NearestFilter,

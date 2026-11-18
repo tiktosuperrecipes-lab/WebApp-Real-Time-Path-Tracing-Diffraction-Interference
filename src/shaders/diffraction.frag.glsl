@@ -6,6 +6,7 @@ in vec2 vUv;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outGBuffer;
+layout(location = 2) out vec4 outAlbedo;
 
 uniform sampler2D uAccumTexture;
 uniform sampler2D uWorldPhotonTex;
@@ -31,7 +32,17 @@ uniform float uAspect;
 const int MIN_BOUNCES_RR = 2;
 const int MAX_BOUNCES = 8;
 
-vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uint rng, out vec3 primaryNormal, out float primaryDepth) {
+vec3 tracePath(
+  vec3 ro,
+  vec3 rd,
+  float glassLambda,
+  float laserLambda,
+  inout uint rng,
+  out vec3 primaryNormal,
+  out float primaryDepth,
+  out vec3 primaryAlbedo,
+  out float primaryIsDiffuse
+) {
   vec3 radianceRGB = vec3(0.0);
   vec3 throughputRGB = vec3(1.0);
   bool lastBounceSpecular = true;
@@ -40,6 +51,8 @@ vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uin
 
   primaryNormal = vec3(0.0);
   primaryDepth = -1.0;
+  primaryAlbedo = vec3(1.0);
+  primaryIsDiffuse = 0.0;
 
   vec3 laserSpectrumRGB = max(wavelengthToLinearRGB(laserLambda), vec3(0.0));
 
@@ -51,8 +64,10 @@ vec3 tracePath(vec3 ro, vec3 rd, float glassLambda, float laserLambda, inout uin
     }
 
     if (bounce == 0) {
-      primaryNormal = hit.normal * ((hit.matType == MAT_DIFFUSE) ? 1.0 : 0.5);
+      primaryNormal = hit.normal;
       primaryDepth = hit.t;
+      primaryIsDiffuse = (hit.matType == MAT_DIFFUSE) ? 1.0 : 0.0;
+      primaryAlbedo = (hit.matType == MAT_DIFFUSE) ? hit.albedo : vec3(1.0);
     }
 
     if (hit.matType == MAT_LIGHT) {
@@ -207,6 +222,8 @@ void main() {
   float batchLum2Sum = 0.0;
   vec3 primaryNormal = vec3(0.0);
   float primaryDepth = -1.0;
+  vec3 primaryAlbedo = vec3(1.0);
+  float primaryIsDiffuse = 0.0;
   mat3 camRot = mat3(uCamMatrix);
 
   uint pixRng = uint(gl_FragCoord.x) * 1973u ^ uint(gl_FragCoord.y) * 9277u ^ 0x9E3779B9u;
@@ -228,7 +245,9 @@ void main() {
 
     vec3 n0;
     float d0;
-    vec3 sampleColor = tracePath(uCamPos, rayDir, glassLambda, laserLambda, rng, n0, d0);
+    vec3 a0;
+    float isDiff0;
+    vec3 sampleColor = tracePath(uCamPos, rayDir, glassLambda, laserLambda, rng, n0, d0, a0, isDiff0);
     if (any(isnan(sampleColor)) || any(isinf(sampleColor))) sampleColor = vec3(0.0);
 
     batchColorSum += sampleColor;
@@ -238,6 +257,8 @@ void main() {
     if (s == 0) {
       primaryNormal = n0;
       primaryDepth = d0;
+      primaryAlbedo = a0;
+      primaryIsDiffuse = isDiff0;
     }
   }
 
@@ -255,4 +276,5 @@ void main() {
   }
 
   outGBuffer = vec4(primaryNormal, primaryDepth);
+  outAlbedo = vec4(primaryAlbedo, primaryIsDiffuse);
 }

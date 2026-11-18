@@ -7,7 +7,7 @@ import photonAccumFrag from '../shaders/photonAccum.frag.glsl?raw';
 import denoiseFrag from '../shaders/denoise.frag.glsl?raw';
 import displayFrag from '../shaders/display.frag.glsl?raw';
 
-const ATROUS_STEPS = [1, 2];
+const ATROUS_STEPS = [0, 1, 2, 4];
 const PHOTON_COUNT = 131072;
 
 export function createRenderPipeline({ renderer, targets, sceneManager, traceSize }) {
@@ -74,6 +74,10 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
     uniforms: {
       uColorTex: { value: null },
       uGBufferTex: { value: null },
+      uAlbedoTex: { value: null },
+      uCamMatrix: { value: new THREE.Matrix4() },
+      uTanHalfFov: { value: Math.tan(THREE.MathUtils.degToRad(sceneManager.camera.fov * 0.5)) },
+      uAspect: { value: sceneManager.camera.aspect },
       uTexSize: { value: new THREE.Vector2(traceSize.x, traceSize.y) },
       uPassIndex: { value: 0 },
       uStepSize: { value: 1 },
@@ -199,10 +203,14 @@ export function createRenderPipeline({ renderer, targets, sceneManager, traceSiz
 
     if (denoiseEnabled) {
       denoiseMaterial.uniforms.uGBufferTex.value = targets.writeAccum.textures[1];
+      denoiseMaterial.uniforms.uAlbedoTex.value = targets.writeAccum.textures[2];
+      denoiseMaterial.uniforms.uCamMatrix.value.copy(sceneManager.camera.matrixWorld);
+      denoiseMaterial.uniforms.uTanHalfFov.value = Math.tan(THREE.MathUtils.degToRad(sceneManager.camera.fov * 0.5));
+      denoiseMaterial.uniforms.uAspect.value = sceneManager.camera.aspect;
       denoiseMaterial.uniforms.uSampleCount.value = nextSampleCount;
 
       let srcTex = targets.writeAccum.textures[0];
-      const dstTargets = [targets.denoiseA, targets.denoiseB];
+      const dstTargets = [targets.denoiseA, targets.denoiseB, targets.denoiseA, targets.denoiseB];
 
       for (let i = 0; i < ATROUS_STEPS.length; i++) {
         denoiseMaterial.uniforms.uColorTex.value = srcTex;
